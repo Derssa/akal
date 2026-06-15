@@ -30,7 +30,7 @@ export class TerminalManager {
   public static async resizeTerminal(exec: any, cols: number, rows: number): Promise<void> {
     try {
       await exec.resize({ h: rows, w: cols });
-    } catch (err) {
+    } catch {
       // Ignore normal resize errors on stream close
     }
   }

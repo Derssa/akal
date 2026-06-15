@@ -40,7 +40,7 @@ export class TerminalGateway {
         if (execStream) {
           try {
             execStream.end();
-          } catch (err) {
+          } catch {
             // Ignore stream termination errors
           }
         }

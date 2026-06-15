@@ -7,6 +7,7 @@
     "start": "node dist/server.js",
     "build": "tsc",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
+    "lint": "eslint .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -20,13 +21,17 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/cors": "^2.8.19",
     "@types/dockerode": "^4.0.1",
     "@types/express": "^5.0.6",
     "@types/node": "^25.9.3",
+    "eslint": "^10.5.0",
+    "globals": "^17.6.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1"
   }
 }

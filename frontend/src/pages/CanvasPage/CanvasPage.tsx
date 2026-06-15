@@ -18,14 +18,30 @@ interface CanvasPageProps {
 
 export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
   const [containers, setContainers] = useState<ContainerData[]>([]);
-  const [loading] = useState(false);
-  const [creating] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
   
   // Track visual node coordinates manually, saved to localStorage
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
 
-  // Load visual coordinates and containers list on mount
+  const fetchContainers = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch('http://localhost:5000/api/containers');
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setContainers(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch containers:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load visual coordinates on mount and poll container states
   useEffect(() => {
+    fetchContainers();
     const savedLayout = localStorage.getItem('akal-lab-graph-layout');
     if (savedLayout) {
       try {
@@ -35,81 +51,79 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
       }
     }
 
-    const savedNodes = localStorage.getItem('akal-lab-containers-list');
-    if (savedNodes) {
-      try {
-        setContainers(JSON.parse(savedNodes));
-      } catch (err) {
-        console.error(err);
-      }
-    }
+    const timer = setInterval(fetchContainers, 4000);
+    return () => clearInterval(timer);
   }, []);
 
   const saveGraphLocally = () => {
     localStorage.setItem('akal-lab-graph-layout', JSON.stringify(positions));
-    localStorage.setItem('akal-lab-containers-list', JSON.stringify(containers));
     alert('System architecture graph layout saved locally!');
   };
 
-  const handleCreateNode = () => {
+  const handleCreateNode = async () => {
     const nodeName = prompt('Enter a name for your Ubuntu node:', `node-${containers.length + 1}`);
     if (!nodeName) return;
 
-    const newId = `ubuntu-node-${Date.now()}`;
-    const newContainer: ContainerData = {
-      id: newId,
-      name: nodeName,
-      state: 'running',
-      status: 'Up less than a second'
-    };
-
-    setContainers(prev => {
-      const updated = [...prev, newContainer];
-      localStorage.setItem('akal-lab-containers-list', JSON.stringify(updated));
-      return updated;
-    });
+    try {
+      setCreating(true);
+      const res = await fetch('http://localhost:5000/api/containers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nodeName })
+      });
+      if (res.ok) {
+        fetchContainers();
+      } else {
+        const error = await res.json();
+        alert(`Failed: ${error.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error creating container node.');
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const handleStart = (id: string) => {
-    setContainers(prev => {
-      const updated = prev.map(c => c.id === id ? { ...c, state: 'running', status: 'Up 1 second' } : c);
-      localStorage.setItem('akal-lab-containers-list', JSON.stringify(updated));
-      return updated;
-    });
+  const handleStart = async (id: string) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/containers/${id}/start`, { method: 'POST' });
+      if (res.ok) fetchContainers();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleStop = (id: string) => {
-    setContainers(prev => {
-      const updated = prev.map(c => c.id === id ? { ...c, state: 'exited', status: 'Exited (0) 1 second ago' } : c);
-      localStorage.setItem('akal-lab-containers-list', JSON.stringify(updated));
-      return updated;
-    });
+  const handleStop = async (id: string) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/containers/${id}/stop`, { method: 'POST' });
+      if (res.ok) fetchContainers();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this container?')) return;
-    setContainers(prev => {
-      const updated = prev.filter(c => c.id !== id);
-      localStorage.setItem('akal-lab-containers-list', JSON.stringify(updated));
-      return updated;
-    });
-    setPositions(prev => {
-      const updated = { ...prev };
-      delete updated[id];
-      localStorage.setItem('akal-lab-graph-layout', JSON.stringify(updated));
-      return updated;
-    });
+    try {
+      const res = await fetch(`http://localhost:5000/api/containers/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setContainers(prev => prev.filter(c => c.id !== id));
+        setPositions(prev => {
+          const updated = { ...prev };
+          delete updated[id];
+          localStorage.setItem('akal-lab-graph-layout', JSON.stringify(updated));
+          return updated;
+        });
+        fetchContainers();
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const refreshNodes = () => {
-    const savedNodes = localStorage.getItem('akal-lab-containers-list');
-    if (savedNodes) {
-      try {
-        setContainers(JSON.parse(savedNodes));
-      } catch (err) {
-        console.error(err);
-      }
-    }
+    fetchContainers();
   };
 
   const nodeTypes = useMemo(() => ({

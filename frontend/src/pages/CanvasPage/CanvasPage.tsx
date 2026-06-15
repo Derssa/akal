@@ -18,105 +18,97 @@ interface CanvasPageProps {
 
 export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
   const [containers, setContainers] = useState<ContainerData[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [loading] = useState(false);
+  const [creating] = useState(false);
   
   // Track visual node coordinates manually, saved to localStorage
   const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
 
-  const fetchContainers = async () => {
-    try {
-      setLoading(true);
-      const res = await fetch('http://localhost:5000/api/containers');
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setContainers(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch containers:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load visual coordinates on mount
+  // Load visual coordinates and containers list on mount
   useEffect(() => {
-    fetchContainers();
-    const saved = localStorage.getItem('akal-lab-graph-layout');
-    if (saved) {
+    const savedLayout = localStorage.getItem('akal-lab-graph-layout');
+    if (savedLayout) {
       try {
-        setPositions(JSON.parse(saved));
+        setPositions(JSON.parse(savedLayout));
       } catch (err) {
         console.error(err);
       }
     }
 
-    const timer = setInterval(fetchContainers, 4000);
-    return () => clearInterval(timer);
+    const savedNodes = localStorage.getItem('akal-lab-containers-list');
+    if (savedNodes) {
+      try {
+        setContainers(JSON.parse(savedNodes));
+      } catch (err) {
+        console.error(err);
+      }
+    }
   }, []);
 
   const saveGraphLocally = () => {
     localStorage.setItem('akal-lab-graph-layout', JSON.stringify(positions));
+    localStorage.setItem('akal-lab-containers-list', JSON.stringify(containers));
     alert('System architecture graph layout saved locally!');
   };
 
-  const handleCreateNode = async () => {
+  const handleCreateNode = () => {
     const nodeName = prompt('Enter a name for your Ubuntu node:', `node-${containers.length + 1}`);
     if (!nodeName) return;
 
-    try {
-      setCreating(true);
-      const res = await fetch('http://localhost:5000/api/containers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nodeName })
-      });
-      if (res.ok) {
-        fetchContainers();
-      } else {
-        const error = await res.json();
-        alert(`Failed: ${error.error}`);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error creating container node.');
-    } finally {
-      setCreating(false);
-    }
+    const newId = `ubuntu-node-${Date.now()}`;
+    const newContainer: ContainerData = {
+      id: newId,
+      name: nodeName,
+      state: 'running',
+      status: 'Up less than a second'
+    };
+
+    setContainers(prev => {
+      const updated = [...prev, newContainer];
+      localStorage.setItem('akal-lab-containers-list', JSON.stringify(updated));
+      return updated;
+    });
   };
 
-  const handleStart = async (id: string) => {
-    try {
-      const res = await fetch(`http://localhost:5000/api/containers/${id}/start`, { method: 'POST' });
-      if (res.ok) fetchContainers();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleStart = (id: string) => {
+    setContainers(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, state: 'running', status: 'Up 1 second' } : c);
+      localStorage.setItem('akal-lab-containers-list', JSON.stringify(updated));
+      return updated;
+    });
   };
 
-  const handleStop = async (id: string) => {
-    try {
-      const res = await fetch(`http://localhost:5000/api/containers/${id}/stop`, { method: 'POST' });
-      if (res.ok) fetchContainers();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleStop = (id: string) => {
+    setContainers(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, state: 'exited', status: 'Exited (0) 1 second ago' } : c);
+      localStorage.setItem('akal-lab-containers-list', JSON.stringify(updated));
+      return updated;
+    });
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm('Are you sure you want to delete this container?')) return;
-    try {
-      const res = await fetch(`http://localhost:5000/api/containers/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        // Remove saved position reference
-        const updatedPos = { ...positions };
-        delete updatedPos[id];
-        setPositions(updatedPos);
-        localStorage.setItem('akal-lab-graph-layout', JSON.stringify(updatedPos));
-        fetchContainers();
+    setContainers(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      localStorage.setItem('akal-lab-containers-list', JSON.stringify(updated));
+      return updated;
+    });
+    setPositions(prev => {
+      const updated = { ...prev };
+      delete updated[id];
+      localStorage.setItem('akal-lab-graph-layout', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const refreshNodes = () => {
+    const savedNodes = localStorage.getItem('akal-lab-containers-list');
+    if (savedNodes) {
+      try {
+        setContainers(JSON.parse(savedNodes));
+      } catch (err) {
+        console.error(err);
       }
-    } catch (err) {
-      console.error(err);
     }
   };
 
@@ -169,7 +161,7 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
         
         <div style={styles.actions}>
           <button 
-            onClick={fetchContainers} 
+            onClick={refreshNodes} 
             style={styles.refreshBtn} 
             disabled={loading}
             title="Refresh Nodes"

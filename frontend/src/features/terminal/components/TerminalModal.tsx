@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
-import { io, Socket } from 'socket.io-client';
 import { X, Terminal as TermIcon } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
 
@@ -13,13 +12,9 @@ interface TerminalModalProps {
 
 export default function TerminalModal({ containerId, nodeName, onClose }: TerminalModalProps) {
   const terminalRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<Socket | null>(null);
   const termRef = useRef<Terminal | null>(null);
 
   useEffect(() => {
-    const socket = io('http://localhost:5000');
-    socketRef.current = socket;
-
     const term = new Terminal({
       cursorBlink: true,
       theme: {
@@ -41,22 +36,61 @@ export default function TerminalModal({ containerId, nodeName, onClose }: Termin
       fitAddon.fit();
     }
 
-    socket.emit('join-terminal', { containerId });
+    const hostPromptName = nodeName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    term.writeln(`Welcome to Ubuntu Server simulator for node [${nodeName}]`);
+    term.writeln('Type "help" for a list of available mock commands.');
+    term.writeln('');
+    term.write(`root@${hostPromptName}:/# `);
 
-    socket.on('terminal-output', (data: string) => {
-      term.write(data);
-    });
+    let currentLine = '';
 
     term.onData((data) => {
-      socket.emit('terminal-input', data);
+      const code = data.charCodeAt(0);
+      
+      // Enter
+      if (code === 13) {
+        term.write('\r\n');
+        const trimmedCmd = currentLine.trim().toLowerCase();
+        
+        if (trimmedCmd === 'help') {
+          term.writeln('Available mock commands:');
+          term.writeln('  help             Show this guide');
+          term.writeln('  ls               List directory files');
+          term.writeln('  uname -a         Display system information');
+          term.writeln('  cat /etc/issue   Show operating system info');
+          term.writeln('  clear            Clear screen');
+        } else if (trimmedCmd === 'ls') {
+          term.writeln('bin   dev  home  lib64  mnt  proc  run   srv  tmp  var');
+          term.writeln('boot  etc  lib   media  opt  root  sbin  sys  usr');
+        } else if (trimmedCmd === 'uname -a') {
+          term.writeln('Linux ubuntu-node 5.15.0-88-generic #98-Ubuntu SMP Mon Oct 2 15:18:56 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux');
+        } else if (trimmedCmd === 'cat /etc/issue' || trimmedCmd === 'cat /etc/os-release') {
+          term.writeln('Ubuntu 22.04.3 LTS \\n \\l');
+        } else if (trimmedCmd === 'clear') {
+          term.clear();
+        } else if (trimmedCmd !== '') {
+          term.writeln(`bash: ${trimmedCmd}: command not found`);
+        }
+        
+        currentLine = '';
+        term.write(`root@${hostPromptName}:/# `);
+      } 
+      // Backspace
+      else if (code === 127) {
+        if (currentLine.length > 0) {
+          currentLine = currentLine.slice(0, -1);
+          term.write('\b \b');
+        }
+      } 
+      // Typeable ascii keys
+      else if (data >= ' ' && data <= '~') {
+        currentLine += data;
+        term.write(data);
+      }
     });
 
     const handleResize = () => {
       fitAddon.fit();
-      socket.emit('terminal-resize', {
-        cols: term.cols,
-        rows: term.rows,
-      });
     };
 
     window.addEventListener('resize', handleResize);
@@ -64,10 +98,9 @@ export default function TerminalModal({ containerId, nodeName, onClose }: Termin
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      socket.disconnect();
       term.dispose();
     };
-  }, [containerId]);
+  }, [containerId, nodeName]);
 
   return (
     <div style={styles.overlay}>

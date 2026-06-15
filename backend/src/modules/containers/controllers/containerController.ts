@@ -4,7 +4,8 @@ import { ContainerService } from '../services/containerService';
 export class ContainerController {
   public static async list(req: Request, res: Response): Promise<void> {
     try {
-      const list = await ContainerService.listContainers();
+      const { projectId } = req.params;
+      const list = await ContainerService.listContainers(projectId as string);
       res.json(list);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -13,12 +14,13 @@ export class ContainerController {
 
   public static async create(req: Request, res: Response): Promise<void> {
     try {
+      const { projectId } = req.params;
       const { name } = req.body;
       if (!name) {
         res.status(400).json({ error: 'Name is required' });
         return;
       }
-      const container = await ContainerService.createContainer(name);
+      const container = await ContainerService.createContainer(projectId as string, name);
       res.status(201).json(container);
     } catch (err: any) {
       res.status(500).json({ error: err.message });

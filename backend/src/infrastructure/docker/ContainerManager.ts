@@ -33,22 +33,22 @@ export class ContainerManager {
     }
   }
 
-  public static async listContainers(): Promise<ContainerInfo[]> {
+  public static async listContainersByProject(projectId: string): Promise<ContainerInfo[]> {
     const containers = await docker.listContainers({ all: true });
     return containers
-      .filter(c => c.Names.some(name => name.includes(this.LAB_PREFIX)))
+      .filter(c => c.Labels && c.Labels['akal.project.id'] === projectId)
       .map(c => ({
         id: c.Id,
-        name: c.Names[0].replace(/^\//, '').replace(this.LAB_PREFIX, ''),
+        name: c.Names[0].replace(/^\//, '').replace(`${this.LAB_PREFIX}${projectId}-`, ''),
         image: c.Image,
         state: c.State,
         status: c.Status
       }));
   }
 
-  public static async createContainer(nodeName: string): Promise<ContainerInfo> {
+  public static async createContainer(projectId: string, nodeName: string): Promise<ContainerInfo> {
     await this.ensureUbuntuImage();
-    const safeName = `${this.LAB_PREFIX}${nodeName.replace(/[^a-zA-Z0-9-_]/g, '')}`;
+    const safeName = `${this.LAB_PREFIX}${projectId}-${nodeName.replace(/[^a-zA-Z0-9-_]/g, '')}`;
 
     const container = await docker.createContainer({
       Image: 'ubuntu:latest',
@@ -57,6 +57,9 @@ export class ContainerManager {
       Tty: true,
       OpenStdin: true,
       StdinOnce: false,
+      Labels: {
+        'akal.project.id': projectId
+      },
       HostConfig: {
         AutoRemove: false
       }

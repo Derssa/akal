@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { ContainerController } from '../controllers/containerController';
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
 router.get('/', ContainerController.list);
 router.post('/', ContainerController.create);

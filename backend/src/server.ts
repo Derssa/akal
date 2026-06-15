@@ -3,6 +3,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { ENV } from './config/env';
+import projectRouter from './modules/projects/routes/projectRoutes';
 import containerRouter from './modules/containers/routes/containerRoutes';
 import { TerminalGateway } from './modules/terminal/gateway/terminalGateway';
 
@@ -15,8 +16,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Container API Router
-app.use('/api/containers', containerRouter);
+// Scoped APIs
+app.use('/api/projects', projectRouter);
+app.use('/api/projects/:projectId/containers', containerRouter);
 
 // Socket.IO Setup
 const io = new Server(server, {

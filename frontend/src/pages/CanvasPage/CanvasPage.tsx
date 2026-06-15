@@ -3,7 +3,7 @@ import { ReactFlow, Background, Controls } from '@xyflow/react';
 import type { Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import UbuntuNode from '../../features/nodes/UbuntuNode/UbuntuNode';
-import { Plus, Server, RefreshCw, Save } from 'lucide-react';
+import { Plus, Server, RefreshCw, Save, ArrowLeft } from 'lucide-react';
 
 interface ContainerData {
   id: string;
@@ -13,10 +13,13 @@ interface ContainerData {
 }
 
 interface CanvasPageProps {
+  projectId: string;
+  projectName: string;
+  onBackToProjects: () => void;
   onTerminalOpen: (id: string, name: string) => void;
 }
 
-export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
+export default function CanvasPage({ projectId, projectName, onBackToProjects, onTerminalOpen }: CanvasPageProps) {
   const [containers, setContainers] = useState<ContainerData[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -27,7 +30,7 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
   const fetchContainers = async () => {
     try {
       setLoading(true);
-      const res = await fetch('http://localhost:5000/api/containers');
+      const res = await fetch(`http://localhost:5000/api/projects/${projectId}/containers`);
       const data = await res.json();
       if (Array.isArray(data)) {
         setContainers(data);
@@ -42,7 +45,7 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
   // Load visual coordinates on mount and poll container states
   useEffect(() => {
     fetchContainers();
-    const savedLayout = localStorage.getItem('akal-lab-graph-layout');
+    const savedLayout = localStorage.getItem(`akal-lab-graph-layout-${projectId}`);
     if (savedLayout) {
       try {
         setPositions(JSON.parse(savedLayout));
@@ -53,10 +56,10 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
 
     const timer = setInterval(fetchContainers, 4000);
     return () => clearInterval(timer);
-  }, []);
+  }, [projectId]);
 
   const saveGraphLocally = () => {
-    localStorage.setItem('akal-lab-graph-layout', JSON.stringify(positions));
+    localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(positions));
     alert('System architecture graph layout saved locally!');
   };
 
@@ -66,7 +69,7 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
 
     try {
       setCreating(true);
-      const res = await fetch('http://localhost:5000/api/containers', {
+      const res = await fetch(`http://localhost:5000/api/projects/${projectId}/containers`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: nodeName })
@@ -87,7 +90,7 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
 
   const handleStart = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/containers/${id}/start`, { method: 'POST' });
+      const res = await fetch(`http://localhost:5000/api/projects/${projectId}/containers/${id}/start`, { method: 'POST' });
       if (res.ok) fetchContainers();
     } catch (err) {
       console.error(err);
@@ -96,7 +99,7 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
 
   const handleStop = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/containers/${id}/stop`, { method: 'POST' });
+      const res = await fetch(`http://localhost:5000/api/projects/${projectId}/containers/${id}/stop`, { method: 'POST' });
       if (res.ok) fetchContainers();
     } catch (err) {
       console.error(err);
@@ -106,13 +109,13 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this container?')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/containers/${id}`, { method: 'DELETE' });
+      const res = await fetch(`http://localhost:5000/api/projects/${projectId}/containers/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setContainers(prev => prev.filter(c => c.id !== id));
         setPositions(prev => {
           const updated = { ...prev };
           delete updated[id];
-          localStorage.setItem('akal-lab-graph-layout', JSON.stringify(updated));
+          localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(updated));
           return updated;
         });
         fetchContainers();
@@ -168,8 +171,11 @@ export default function CanvasPage({ onTerminalOpen }: CanvasPageProps) {
       {/* Top Header / Control Bar */}
       <div style={styles.topbar} className="glass">
         <div style={styles.brand}>
-          <Server size={22} color="#3B82F6" />
-          <span style={styles.brandTitle}>Backend Systems Lab</span>
+          <button onClick={onBackToProjects} style={styles.backBtn} title="Back to Projects">
+            <ArrowLeft size={16} />
+          </button>
+          <Server size={22} color="#3B82F6" style={{ marginLeft: 8 }} />
+          <span style={styles.brandTitle}>{projectName}</span>
           <span style={styles.badge}>Phase 1</span>
         </div>
         
@@ -252,6 +258,19 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
+  },
+  backBtn: {
+    background: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '6px',
+    color: '#9CA3AF',
+    cursor: 'pointer',
+    width: '28px',
+    height: '28px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s',
   },
   brandTitle: {
     fontWeight: 700,

@@ -6,6 +6,7 @@ import { ENV } from './config/env';
 import projectRouter from './modules/projects/routes/projectRoutes';
 import containerRouter from './modules/containers/routes/containerRoutes';
 import { TerminalGateway } from './modules/terminal/gateway/terminalGateway';
+import { DockerInitializer } from './infrastructure/docker/DockerInitializer';
 
 const app = express();
 const server = http.createServer(app);
@@ -32,4 +33,6 @@ TerminalGateway.handleConnections(io);
 
 server.listen(ENV.PORT, () => {
   console.log(`Backend server running in ${ENV.NODE_ENV} mode on port ${ENV.PORT}`);
+  // Run background Docker check & pull
+  DockerInitializer.initialize();
 });

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
-import { API_BASE, ContainerData } from '../types';
+import { API_BASE } from '../types';
+import type { ContainerData } from '../types';
 
 interface UseContainersOptions {
   projectId: string;

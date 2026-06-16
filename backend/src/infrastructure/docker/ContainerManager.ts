@@ -14,22 +14,14 @@ export class ContainerManager {
   private static async ensureUbuntuImage(): Promise<void> {
     const images = await docker.listImages();
     const hasUbuntu = images.some(img =>
-      img.RepoTags && img.RepoTags.some(tag => tag.startsWith('ubuntu'))
+      img.RepoTags && img.RepoTags.some(tag => tag.startsWith('akal-ubuntu:latest'))
     );
 
     if (!hasUbuntu) {
-      console.log('Ubuntu image not found locally. Pulling ubuntu:latest...');
-      await new Promise<void>((resolve, reject) => {
-        docker.pull('ubuntu:latest', {}, (err, stream) => {
-          if (err) return reject(err);
-          if (!stream) return reject(new Error('Pull stream is undefined'));
-          docker.modem.followProgress(stream, (errFinished) => {
-            if (errFinished) return reject(errFinished);
-            resolve();
-          });
-        });
-      });
-      console.log('Ubuntu image successfully pulled.');
+      console.error('Custom image "akal-ubuntu:latest" not found locally.');
+      console.info('Please run the following build command first:');
+      console.info('docker build -t akal-ubuntu:latest -f backend/docker/ubuntu-node/Dockerfile backend/docker/ubuntu-node');
+      throw new Error('Required Docker image "akal-ubuntu:latest" not found. Run "docker build -t akal-ubuntu:latest -f backend/docker/ubuntu-node/Dockerfile backend/docker/ubuntu-node" first.');
     }
   }
 
@@ -51,7 +43,7 @@ export class ContainerManager {
     const safeName = `${this.LAB_PREFIX}${projectId}-${nodeName.replace(/[^a-zA-Z0-9-_]/g, '')}`;
 
     const container = await docker.createContainer({
-      Image: 'ubuntu:latest',
+      Image: 'akal-ubuntu:latest',
       name: safeName,
       Cmd: ['/bin/bash'],
       Tty: true,
@@ -70,7 +62,7 @@ export class ContainerManager {
     return {
       id: container.id,
       name: nodeName,
-      image: 'ubuntu:latest',
+      image: 'akal-ubuntu:latest',
       state: 'running',
       status: 'Up less than a second'
     };

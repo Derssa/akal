@@ -4,7 +4,8 @@ import InputModal from '../../shared/components/InputModal';
 import ConfirmModal from '../../shared/components/ConfirmModal';
 import ProjectCard from './components/ProjectCard';
 import EmptyState from './components/EmptyState';
-import { API_BASE, Project } from '../../shared/types';
+import { API_BASE } from '../../shared/types';
+import type { Project } from '../../shared/types';
 
 interface ProjectsPageProps {
   onSelectProject: (id: string, name: string) => void;

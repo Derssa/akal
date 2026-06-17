@@ -331,17 +331,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     }
   }, [networkConfig, saveNetworkConfig, showToast, triggerArchitectureAudit]);
 
-  // Helper to generate default security group rules for network nodes
+  // Helper to generate default security group rules for network nodes (deny all inbound by default)
   const initDefaultRules = (nodeId: string, nodeType: string, subnetId: string) => {
-    const defaultPort = nodeType === 'postgres' ? '5432' : nodeType === 'mysql' ? '3306' : '80';
     return [
-      {
-        id: `rule-${Math.random().toString(36).substr(2, 9)}`,
-        type: 'inbound' as const,
-        action: 'ALLOW' as const,
-        port: defaultPort,
-        source: subnetId
-      },
       {
         id: `rule-${Math.random().toString(36).substr(2, 9)}`,
         type: 'outbound' as const,

@@ -91,24 +91,24 @@ export default function NodeLibrary({ onCollapseChange }: NodeLibraryProps) {
 
       {isCollapsed && (
         <div style={styles.collapsedIcons}>
-          <div 
-            draggable 
+          <div
+            draggable
             onDragStart={(e) => handleDragStart(e, 'ubuntu')}
             style={styles.collapsedIconNode}
             title="Drag Ubuntu Server"
           >
             <Server size={20} color="#3B82F6" />
           </div>
-          <div 
-            draggable 
+          <div
+            draggable
             onDragStart={(e) => handleDragStart(e, 'postgres')}
             style={styles.collapsedIconNode}
             title="Drag PostgreSQL"
           >
             <Database size={20} color="#10B981" />
           </div>
-          <div 
-            draggable 
+          <div
+            draggable
             onDragStart={(e) => handleDragStart(e, 'mysql')}
             style={styles.collapsedIconNode}
             title="Drag MySQL"

@@ -57,37 +57,36 @@ function autoGrowContainers(
   containers: any[],
   positions: Record<string, { x: number; y: number }>
 ): NetworkConfig {
-  const defaultSubnetWidth = 260;
-  const defaultSubnetHeight = 180;
+  const defaultSubnetWidth = 280;
+  const defaultSubnetHeight = 220;
 
-  const paddingRight = 40;
-  const paddingBottom = 80;
+  const nodeWidth = 220;
+  const nodeHeight = 140;
+  const gapX = 30;
+  const gapY = 30;
+  const paddingLeft = 30;
+  const paddingRight = 30;
+  const paddingTop = 50;
+  const paddingBottom = 40;
+  const numColumns = 2;
 
-  // 1. Grow Subnets based on nested services
+  // 1. Grow Subnets based on nested services and auto-position them
   const updatedSubnets = config.subnets.map(subnet => {
     const subnetNodes = containers.filter(c => config.nodeSubnetMap[c.id] === subnet.id);
     if (subnetNodes.length === 0) {
       return { ...subnet, width: defaultSubnetWidth, height: defaultSubnetHeight };
     }
 
-    let maxRight = defaultSubnetWidth - paddingRight;
-    let maxBottom = defaultSubnetHeight - paddingBottom;
+    const cols = Math.min(subnetNodes.length, numColumns);
+    const rows = Math.ceil(subnetNodes.length / numColumns);
 
-    subnetNodes.forEach(node => {
-      const pos = positions[node.id];
-      if (pos) {
-        // Node size is roughly 220x140
-        const right = pos.x + 220;
-        const bottom = pos.y + 140;
-        if (right > maxRight) maxRight = right;
-        if (bottom > maxBottom) maxBottom = bottom;
-      }
-    });
+    const calculatedWidth = paddingLeft + cols * (nodeWidth + gapX) - gapX + paddingRight;
+    const calculatedHeight = paddingTop + rows * (nodeHeight + gapY) - gapY + paddingBottom;
 
     return {
       ...subnet,
-      width: Math.max(defaultSubnetWidth, maxRight + paddingRight),
-      height: Math.max(defaultSubnetHeight, maxBottom + paddingBottom)
+      width: Math.max(defaultSubnetWidth, calculatedWidth),
+      height: Math.max(defaultSubnetHeight, calculatedHeight)
     };
   });
 
@@ -131,6 +130,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const dragStartPositionsRef = useRef<Record<string, { x: number; y: number; parentId?: string }>>({});
   const prevDbCountRef = useRef(0);
   const hasShownCacheWarningRef = useRef(false);
+  const draggingNodeIdRef = useRef<string | null>(null);
 
   // React Flow managed nodes state
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -467,9 +467,36 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           delete dropPositionsRef.current[c.name];
         }
 
-        const position = dropPos || savedPos || existing?.position || { x: defaultX, y: defaultY };
-        const nodeType = c.type || 'ubuntu';
         const parentId = updatedNodeSubnetMap[c.id] || undefined;
+        const isDragging = draggingNodeIdRef.current === c.id;
+
+        let position = dropPos || savedPos || existing?.position || { x: defaultX, y: defaultY };
+
+        // Auto-layout grid for subnet children (if not currently dragging)
+        if (parentId && parentId.startsWith('subnet-') && !isDragging) {
+          const subnetNodes = containers.filter(node => updatedNodeSubnetMap[node.id] === parentId);
+          const indexInSubnet = subnetNodes.findIndex(node => node.id === c.id);
+          if (indexInSubnet !== -1) {
+            const nodeWidth = 220;
+            const nodeHeight = 140;
+            const gapX = 30;
+            const gapY = 30;
+            const paddingLeft = 30;
+            const paddingTop = 50;
+            const numColumns = 2;
+
+            const col = indexInSubnet % numColumns;
+            const row = Math.floor(indexInSubnet / numColumns);
+            
+            position = {
+              x: paddingLeft + col * (nodeWidth + gapX),
+              y: paddingTop + row * (nodeHeight + gapY)
+            };
+            positionsRef.current[c.id] = position;
+          }
+        }
+
+        const nodeType = c.type || 'ubuntu';
 
         return {
           ...existing,
@@ -519,6 +546,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
 
   // Track start position on drag start to allow rollback/reversion if drop is invalid
   const onNodeDragStart = useCallback((_event: any, node: Node) => {
+    draggingNodeIdRef.current = node.id;
     dragStartPositionsRef.current[node.id] = {
       x: node.position.x,
       y: node.position.y,
@@ -641,6 +669,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
 
   // Save position to ref and localStorage when drag ends (auto-save with overlapping logic)
   const onNodeDragStop = useCallback((_event: any, draggedNode: Node) => {
+    draggingNodeIdRef.current = null;
     if (!reactFlowInstance) return;
 
     const currentNodes = reactFlowInstance.getNodes();

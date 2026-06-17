@@ -14,6 +14,39 @@ export default function SubnetNode({ id, data, selected }: any) {
     ? (data.hoverStatus === 'valid' ? '0 0 15px rgba(16, 185, 129, 0.4)' : '0 0 15px rgba(239, 68, 68, 0.4)') 
     : 'none';
 
+  const cols = data.columns || 2;
+  const rows = Math.max(1, Math.round(((data.height || 240) - 50) / 190));
+
+  const placeholders = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      placeholders.push(
+        <div
+          key={`placeholder-${r}-${c}`}
+          style={{
+            position: 'absolute',
+            left: 40 + c * 280,
+            top: 60 + r * 190,
+            width: 220,
+            height: 140,
+            border: '2.5px dashed rgba(0, 0, 0, 0.045)',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'rgba(0, 0, 0, 0.12)',
+            fontSize: '11px',
+            fontWeight: 700,
+            pointerEvents: 'none',
+            backgroundColor: 'rgba(0, 0, 0, 0.005)'
+          }}
+        >
+          Slot {r * cols + c + 1}
+        </div>
+      );
+    }
+  }
+
   return (
     <div style={{
       width: '100%',
@@ -35,6 +68,7 @@ export default function SubnetNode({ id, data, selected }: any) {
         isVisible={true}
         onResize={(evt, params) => data.onResize?.(evt, { id, ...params })}
       />
+      {placeholders}
       <div style={{
         position: 'absolute',
         top: '-12px',

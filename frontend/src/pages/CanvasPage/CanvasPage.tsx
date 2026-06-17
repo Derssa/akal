@@ -234,13 +234,17 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     if (!id.startsWith('subnet-')) return;
 
     const newColumns = Math.max(1, Math.round((width - 20) / 280));
+    const lockedWidth = 20 + newColumns * 280;
+
+    const newRows = Math.max(1, Math.round((height - 50) / 190));
+    const lockedHeight = 50 + newRows * 190;
 
     const updatedSubnets = networkConfig.subnets.map(s => {
       if (s.id === id) {
         return {
           ...s,
-          width,
-          height,
+          width: lockedWidth,
+          height: lockedHeight,
           columns: newColumns
         };
       }
@@ -473,6 +477,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             id: subnet.id,
             name: subnet.name,
             type: subnet.type,
+            width: subnet.width,
+            height: subnet.height,
+            columns: subnet.columns || 2,
             onManageRoutes: (id: string, name: string) => {
               setInspectingSubnet({ id, name });
             },

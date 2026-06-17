@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Database, Table, Columns, Play, Copy, Check, Search, BookOpen, Terminal, RefreshCw, AlertCircle } from 'lucide-react';
+import { X, Database, Table, Columns, Play, Copy, Check, Search, BookOpen, Terminal, RefreshCw, AlertCircle, Eye } from 'lucide-react';
 import { API_BASE } from '../../../shared/types';
 
 interface PostgresModalProps {
@@ -180,6 +180,30 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
       }
     } catch (err: any) {
       setQueryOutput(localConsoleOutput + `Execution failed: ${err.message}`);
+  };
+
+  const handleViewTableData = async (database: string, tableName: string) => {
+    setSelectedDb(database);
+    const query = `SELECT * FROM ${tableName} LIMIT 100;`;
+    setSqlQuery(query);
+    setActiveTab('shell');
+
+    try {
+      setExecuting(true);
+      setQueryOutput('Executing query in container...');
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/postgres/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, database })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setQueryOutput(data.result || 'Query executed successfully with no output.');
+      } else {
+        setQueryOutput(`ERROR: ${data.error}`);
+      }
+    } catch (err: any) {
+      setQueryOutput(`Execution failed: ${err.message}`);
     } finally {
       setExecuting(false);
     }
@@ -273,6 +297,19 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                                 <div style={styles.treeRow} onClick={() => toggleTableExpand(tblKey)}>
                                   <Table size={14} color="#10B981" style={{ marginRight: 8 }} />
                                   <span style={styles.tableName}>{table.name}</span>
+                                  
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation(); // prevent collapsing the node
+                                      handleViewTableData(node.database, table.name);
+                                    }}
+                                    style={styles.inlineViewBtn}
+                                    title="View Table Data (SQL Shell)"
+                                    className="glass"
+                                  >
+                                    <Eye size={12} style={{ marginRight: 4 }} />
+                                    View Data
+                                  </button>
                                 </div>
 
                                 {expandedTables[tblKey] && (
@@ -702,5 +739,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--color-text-muted)',
     padding: '4px',
     borderRadius: '4px',
+  },
+  inlineViewBtn: {
+    marginLeft: 'auto',
+    backgroundColor: 'var(--color-accent-glow)',
+    border: '1px solid rgba(37, 99, 235, 0.2)',
+    borderRadius: '4px',
+    color: 'var(--color-accent)',
+    fontSize: '11px',
+    padding: '2px 8px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    transition: 'all 0.2s',
   }
 };

@@ -66,7 +66,7 @@ export default function SubnetNode({ id, data, selected }: any) {
         minHeight={240}
         grid={[280, 190]}
         isVisible={true}
-        onResize={(evt, params) => data.onResize?.(evt, { id, ...params })}
+        onResizeStop={(evt, params) => data.onResize?.(evt, { id, ...params })}
       />
       {placeholders}
       <div style={{
@@ -143,30 +143,6 @@ export default function SubnetNode({ id, data, selected }: any) {
       >
         <Trash size={9} />
       </button>
-
-      {/* Visually stunning "+" Drop Zone */}
-      <div style={{
-        position: 'absolute',
-        bottom: '12px',
-        left: '12px',
-        right: '12px',
-        height: '38px',
-        border: `2px dashed ${isPublic ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
-        borderRadius: '6px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: isPublic ? '#10B981' : '#F59E0B',
-        fontSize: '10px',
-        fontWeight: 700,
-        letterSpacing: '0.5px',
-        gap: '4px',
-        pointerEvents: 'none',
-        backgroundColor: isPublic ? 'rgba(16, 185, 129, 0.02)' : 'rgba(245, 158, 11, 0.02)',
-      }}>
-        <span style={{ fontSize: '12px' }}>+</span>
-        <span>DROP SERVICES HERE</span>
-      </div>
     </div>
   );
 }

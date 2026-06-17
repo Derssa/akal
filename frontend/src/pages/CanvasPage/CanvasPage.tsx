@@ -62,8 +62,8 @@ function autoGrowContainers(
 
   const nodeWidth = 220;
   const nodeHeight = 140;
-  const gapX = 30;
-  const gapY = 30;
+  const gapX = 60;
+  const gapY = 50;
   const paddingLeft = 30;
   const paddingRight = 30;
   const paddingTop = 50;
@@ -479,8 +479,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           if (indexInSubnet !== -1) {
             const nodeWidth = 220;
             const nodeHeight = 140;
-            const gapX = 30;
-            const gapY = 30;
+            const gapX = 60;
+            const gapY = 50;
             const paddingLeft = 30;
             const paddingTop = 50;
             const numColumns = 2;

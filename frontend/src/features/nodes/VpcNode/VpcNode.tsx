@@ -84,6 +84,31 @@ export default function VpcNode({ data }: any) {
       >
         <Trash size={9} />
       </button>
+
+      {/* Visually stunning "+" Drop Zone */}
+      <div style={{
+        position: 'absolute',
+        bottom: '16px',
+        left: '16px',
+        right: '16px',
+        height: '48px',
+        border: '2px dashed rgba(37, 99, 235, 0.25)',
+        borderRadius: '8px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--color-accent)',
+        fontSize: '11px',
+        fontWeight: 700,
+        letterSpacing: '0.5px',
+        gap: '6px',
+        pointerEvents: 'none',
+        backgroundColor: 'rgba(37, 99, 235, 0.02)',
+        transition: 'all 0.2s ease',
+      }}>
+        <span style={{ fontSize: '14px' }}>+</span>
+        <span>DROP SUBNETS OR SERVICES HERE</span>
+      </div>
     </div>
   );
 }

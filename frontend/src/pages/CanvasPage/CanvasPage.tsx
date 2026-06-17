@@ -58,6 +58,86 @@ interface NetworkConfig {
   nodeSecurityGroups: Record<string, SecurityGroupRule[]>; // nodeId -> SecurityGroupRule[]
 }
 
+function autoGrowContainers(
+  config: NetworkConfig,
+  containers: any[],
+  positions: Record<string, { x: number; y: number }>
+): NetworkConfig {
+  const defaultSubnetWidth = 260;
+  const defaultSubnetHeight = 180;
+  const defaultVpcWidth = 600;
+  const defaultVpcHeight = 400;
+
+  const paddingRight = 40;
+  const paddingBottom = 80;
+
+  // 1. Grow Subnets based on nested services
+  const updatedSubnets = config.subnets.map(subnet => {
+    const subnetNodes = containers.filter(c => config.nodeSubnetMap[c.id] === subnet.id);
+    if (subnetNodes.length === 0) {
+      return { ...subnet, width: defaultSubnetWidth, height: defaultSubnetHeight };
+    }
+
+    let maxRight = defaultSubnetWidth - paddingRight;
+    let maxBottom = defaultSubnetHeight - paddingBottom;
+
+    subnetNodes.forEach(node => {
+      const pos = positions[node.id];
+      if (pos) {
+        // Node size is roughly 220x140
+        const right = pos.x + 220;
+        const bottom = pos.y + 140;
+        if (right > maxRight) maxRight = right;
+        if (bottom > maxBottom) maxBottom = bottom;
+      }
+    });
+
+    return {
+      ...subnet,
+      width: Math.max(defaultSubnetWidth, maxRight + paddingRight),
+      height: Math.max(defaultSubnetHeight, maxBottom + paddingBottom)
+    };
+  });
+
+  // 2. Grow VPCs based on nested subnets and direct service nodes
+  const updatedVpcs = config.vpcs.map(vpc => {
+    const vpcSubnets = updatedSubnets.filter(s => s.vpcId === vpc.id);
+    const vpcDirectNodes = containers.filter(c => config.nodeSubnetMap[c.id] === vpc.id);
+
+    let maxRight = defaultVpcWidth - paddingRight;
+    let maxBottom = defaultVpcHeight - paddingBottom;
+
+    vpcSubnets.forEach(subnet => {
+      const right = subnet.position.x + subnet.width;
+      const bottom = subnet.position.y + subnet.height;
+      if (right > maxRight) maxRight = right;
+      if (bottom > maxBottom) maxBottom = bottom;
+    });
+
+    vpcDirectNodes.forEach(node => {
+      const pos = positions[node.id];
+      if (pos) {
+        const right = pos.x + 220;
+        const bottom = pos.y + 140;
+        if (right > maxRight) maxRight = right;
+        if (bottom > maxBottom) maxBottom = bottom;
+      }
+    });
+
+    return {
+      ...vpc,
+      width: Math.max(defaultVpcWidth, maxRight + paddingRight),
+      height: Math.max(defaultVpcHeight, maxBottom + paddingBottom)
+    };
+  });
+
+  return {
+    ...config,
+    subnets: updatedSubnets,
+    vpcs: updatedVpcs
+  };
+}
+
 export default function CanvasPage({ projectId, projectName, onBackToProjects, onTerminalOpen }: CanvasPageProps) {
   const { toast, showNotification, showToast, dismissToast } = useToast();
 
@@ -115,9 +195,10 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
 
   // Save/load network config helper
   const saveNetworkConfig = useCallback((newConfig: NetworkConfig) => {
-    setNetworkConfig(newConfig);
-    localStorage.setItem(`akal-lab-network-config-${projectId}`, JSON.stringify(newConfig));
-  }, [projectId]);
+    const grownConfig = autoGrowContainers(newConfig, containers, positionsRef.current);
+    setNetworkConfig(grownConfig);
+    localStorage.setItem(`akal-lab-network-config-${projectId}`, JSON.stringify(grownConfig));
+  }, [projectId, containers]);
 
   const triggerArchitectureAudit = useCallback((configToValidate: NetworkConfig) => {
     const result = validateArchitecture(configToValidate, containers);

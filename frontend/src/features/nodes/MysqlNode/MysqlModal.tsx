@@ -32,6 +32,7 @@ export default function MysqlModal({ containerId, nodeName, projectId, onClose }
   const [activeTab, setActiveTab] = useState<'explorer' | 'shell' | 'cheatsheet'>('explorer');
   const [explorerData, setExplorerData] = useState<DBNode[]>([]);
   const [loadingExplorer, setLoadingExplorer] = useState(false);
+  const [explorerError, setExplorerError] = useState<string | null>(null);
   
   // Shell states
   const [selectedDb, setSelectedDb] = useState('mysql');
@@ -50,6 +51,7 @@ export default function MysqlModal({ containerId, nodeName, projectId, onClose }
   const fetchExplorerData = async () => {
     try {
       setLoadingExplorer(true);
+      setExplorerError(null);
       const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/mysql/explorer`);
       if (res.ok) {
         const data = await res.json();
@@ -60,9 +62,12 @@ export default function MysqlModal({ containerId, nodeName, projectId, onClose }
           const firstDbName = data[0].database;
           setExpandedDBs(prev => ({ [firstDbName]: true, ...prev }));
         }
+      } else {
+        const errData = await res.json();
+        setExplorerError(errData.error || 'Failed to inspect schema');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      setExplorerError(err.message || 'Failed to connect to container');
     } finally {
       setLoadingExplorer(false);
     }
@@ -213,7 +218,16 @@ export default function MysqlModal({ containerId, nodeName, projectId, onClose }
               </div>
 
               <div style={styles.explorerTree}>
-                {explorerData.length > 0 ? (
+                {explorerError ? (
+                  <div style={styles.errorContainer}>
+                    <AlertCircle size={24} color="#EF4444" style={{ marginBottom: 12 }} />
+                    <span style={styles.errorMessage}>{explorerError}</span>
+                    <button onClick={fetchExplorerData} style={styles.retryBtn}>
+                      <RefreshCw size={12} style={{ marginRight: 6 }} />
+                      Retry Schema Scan
+                    </button>
+                  </div>
+                ) : explorerData.length > 0 ? (
                   explorerData.map(node => (
                     <div key={node.database} style={styles.treeNode}>
                       <div style={styles.treeRow} onClick={() => toggleDBExpand(node.database)}>
@@ -693,5 +707,31 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     transition: 'all 0.2s',
+  },
+  errorContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '30px 20px',
+    textAlign: 'center',
+  },
+  errorMessage: {
+    fontSize: '13px',
+    color: 'var(--color-text-secondary)',
+    marginBottom: '16px',
+    maxWidth: '400px',
+  },
+  retryBtn: {
+    backgroundColor: 'var(--color-accent)',
+    color: '#FFF',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '6px 16px',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
   }
 };

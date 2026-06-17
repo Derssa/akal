@@ -29,6 +29,9 @@ export class ContainerService {
       "SELECT datname FROM pg_database WHERE datistemplate = false AND datname NOT IN ('template1');",
       ['-t', '-A']
     );
+    if (dbsRaw.startsWith('ERROR') || dbsRaw.includes('failed') || dbsRaw.includes('could not connect')) {
+      throw new Error(dbsRaw);
+    }
     const databases = dbsRaw.split('\n').map(db => db.trim()).filter(Boolean);
 
     // Ensure 'postgres' is listed if not already present
@@ -99,6 +102,9 @@ export class ContainerService {
       'SHOW DATABASES;',
       ['-N', '-B']
     );
+    if (dbsRaw.startsWith('ERROR') || dbsRaw.includes('Can\'t connect') || dbsRaw.includes('ERROR 2002')) {
+      throw new Error(dbsRaw);
+    }
     const systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys'];
     const databases = dbsRaw
       .split('\n')

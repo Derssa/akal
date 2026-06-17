@@ -143,24 +143,47 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   }, [containerId]);
 
   const handleExecuteQuery = async () => {
+    let targetDb = selectedDb;
+    let queryToRun = sqlQuery;
+    let localConsoleOutput = '';
+
+    // Check for \c or \connect database meta-command
+    const connectRegex = /^\s*\\(?:c|connect)\s+([a-zA-Z0-9_"\-]+)/m;
+    const match = sqlQuery.match(connectRegex);
+    if (match) {
+      const dbName = match[1].replace(/"/g, ''); // strip optional quotes
+      targetDb = dbName;
+      setSelectedDb(dbName);
+      // Remove the switch command from the query text that gets sent to the server
+      queryToRun = sqlQuery.replace(connectRegex, '').trim();
+      localConsoleOutput = `Switched database connection context to "${dbName}".\n`;
+    }
+
+    if (!queryToRun) {
+      setQueryOutput(`${localConsoleOutput}No SQL statements left to run.`);
+      // Refresh explorer in case database was just created or switched
+      fetchExplorerData();
+      return;
+    }
+
     try {
       setExecuting(true);
-      setQueryOutput('Executing query in container...');
+      setQueryOutput(localConsoleOutput + 'Executing query in container...');
       const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/postgres/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: sqlQuery, database: selectedDb })
+        body: JSON.stringify({ query: queryToRun, database: targetDb })
       });
       const data = await res.json();
       if (res.ok) {
-        setQueryOutput(data.result || 'Query executed successfully with no output.');
+        setQueryOutput(localConsoleOutput + (data.result || 'Query executed successfully with no output.'));
         // Refresh explorer in background to capture structural changes
         fetchExplorerData();
       } else {
-        setQueryOutput(`ERROR: ${data.error}`);
+        setQueryOutput(localConsoleOutput + `ERROR: ${data.error}`);
       }
     } catch (err: any) {
-      setQueryOutput(`Execution failed: ${err.message}`);
+      setQueryOutput(localConsoleOutput + `Execution failed: ${err.message}`);
     } finally {
       setExecuting(false);
     }

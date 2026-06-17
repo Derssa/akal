@@ -23,6 +23,7 @@ import RoutingTableModal from '../../features/nodes/SubnetNode/RoutingTableModal
 import SecurityGroupsModal from '../../features/nodes/SecurityGroups/SecurityGroupsModal';
 import type { SecurityGroupRule } from '../../features/nodes/SecurityGroups/SecurityGroupsModal';
 import VpcModal from '../../features/nodes/VpcNode/VpcModal';
+import { validateArchitecture } from '../../shared/utils/architectureValidator';
 
 interface CanvasPageProps {
   projectId: string;
@@ -58,7 +59,7 @@ interface NetworkConfig {
 }
 
 export default function CanvasPage({ projectId, projectName, onBackToProjects, onTerminalOpen }: CanvasPageProps) {
-  const { toast, showToast, dismissToast } = useToast();
+  const { toast, showNotification, showToast, dismissToast } = useToast();
 
   const {
     containers,
@@ -88,6 +89,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const dropPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
   const dropSubnetsRef = useRef<Record<string, string>>({});
   const pendingSubnetIdRef = useRef<string | null>(null);
+  const dragStartPositionsRef = useRef<Record<string, { x: number; y: number; parentId?: string }>>({});
 
   // React Flow managed nodes state
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -117,6 +119,17 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     localStorage.setItem(`akal-lab-network-config-${projectId}`, JSON.stringify(newConfig));
   }, [projectId]);
 
+  const triggerArchitectureAudit = useCallback((configToValidate: NetworkConfig) => {
+    const result = validateArchitecture(configToValidate, containers);
+    if (result.errors.length > 0) {
+      showNotification({ type: 'error', message: result.errors[0] });
+    } else if (result.warnings.length > 0) {
+      showNotification({ type: 'warning', message: result.warnings[0] });
+    } else if (result.successes.length > 0) {
+      showNotification({ type: 'success', message: result.successes[0] });
+    }
+  }, [containers, showNotification]);
+
   // VPC and Subnet direct deletion handlers
   const handleDeleteVpc = useCallback((vpcId: string) => {
     const updatedVpcs = networkConfig.vpcs.filter(v => v.id !== vpcId);
@@ -124,9 +137,11 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       if (s.vpcId === vpcId) return { ...s, vpcId: null };
       return s;
     });
-    saveNetworkConfig({ ...networkConfig, vpcs: updatedVpcs, subnets: updatedSubnets });
+    const newConfig = { ...networkConfig, vpcs: updatedVpcs, subnets: updatedSubnets };
+    saveNetworkConfig(newConfig);
     showToast("VPC deleted successfully");
-  }, [networkConfig, saveNetworkConfig, showToast]);
+    triggerArchitectureAudit(newConfig);
+  }, [networkConfig, saveNetworkConfig, showToast, triggerArchitectureAudit]);
 
   const handleDeleteSubnet = useCallback((subnetId: string) => {
     const updatedSubnets = networkConfig.subnets.filter(s => s.id !== subnetId);
@@ -134,9 +149,11 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     Object.keys(updatedNodeSubnetMap).forEach(k => {
       if (updatedNodeSubnetMap[k] === subnetId) delete updatedNodeSubnetMap[k];
     });
-    saveNetworkConfig({ ...networkConfig, subnets: updatedSubnets, nodeSubnetMap: updatedNodeSubnetMap });
+    const newConfig = { ...networkConfig, subnets: updatedSubnets, nodeSubnetMap: updatedNodeSubnetMap };
+    saveNetworkConfig(newConfig);
     showToast("Subnet deleted successfully");
-  }, [networkConfig, saveNetworkConfig, showToast]);
+    triggerArchitectureAudit(newConfig);
+  }, [networkConfig, saveNetworkConfig, showToast, triggerArchitectureAudit]);
 
   // Dynamic Edges builder representing firewall rules
   const edges = useMemo(() => {
@@ -219,9 +236,11 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       ...networkConfig.nodeSecurityGroups,
       [target]: [...currentRules, newRule]
     };
-    saveNetworkConfig({ ...networkConfig, nodeSecurityGroups: updatedSecurityGroups });
+    const newConfig = { ...networkConfig, nodeSecurityGroups: updatedSecurityGroups };
+    saveNetworkConfig(newConfig);
     showToast(`Security Group: Allowed Port ${defaultPort} inbound from ${targetNode.name}`);
-  }, [containers, networkConfig, saveNetworkConfig, showToast]);
+    triggerArchitectureAudit(newConfig);
+  }, [containers, networkConfig, saveNetworkConfig, showToast, triggerArchitectureAudit]);
 
   // Handle connection line deletion (removes matching firewall rule)
   const onEdgesDelete = useCallback((deletedEdges: Edge[]) => {
@@ -242,10 +261,12 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     });
 
     if (changed) {
-      saveNetworkConfig({ ...networkConfig, nodeSecurityGroups: updatedSecurityGroups });
+      const newConfig = { ...networkConfig, nodeSecurityGroups: updatedSecurityGroups };
+      saveNetworkConfig(newConfig);
       showToast("Firewall rule removed");
+      triggerArchitectureAudit(newConfig);
     }
-  }, [networkConfig, saveNetworkConfig, showToast]);
+  }, [networkConfig, saveNetworkConfig, showToast, triggerArchitectureAudit]);
 
   // Helper to generate default security group rules for network nodes
   const initDefaultRules = (nodeId: string, nodeType: string, subnetId: string) => {
@@ -382,7 +403,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           delete dropPositionsRef.current[c.name];
         }
 
-        const position = existing?.position || dropPos || savedPos || { x: defaultX, y: defaultY };
+                const position = dropPos || savedPos || existing?.position || { x: defaultX, y: defaultY };
         const nodeType = c.type || 'ubuntu';
         const parentId = updatedNodeSubnetMap[c.id] || undefined;
 
@@ -432,6 +453,15 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     };
   };
 
+  // Track start position on drag start to allow rollback/reversion if drop is invalid
+  const onNodeDragStart = useCallback((_event: any, node: Node) => {
+    dragStartPositionsRef.current[node.id] = {
+      x: node.position.x,
+      y: node.position.y,
+      parentId: node.parentId
+    };
+  }, []);
+
   // Save position to ref and localStorage when drag ends (auto-save with overlapping logic)
   const onNodeDragStop = useCallback((_event: any, draggedNode: Node) => {
     if (!reactFlowInstance) return;
@@ -447,14 +477,55 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       absY += parentPos.y;
     }
 
+    const revertNode = (message: string) => {
+      showNotification({ type: 'error', message });
+      const original = dragStartPositionsRef.current[draggedNode.id];
+      if (original) {
+        setNodes(prev => prev.map(n => {
+          if (n.id === draggedNode.id) {
+            return {
+              ...n,
+              position: { x: original.x, y: original.y },
+              parentId: original.parentId
+            };
+          }
+          return n;
+        }));
+      }
+    };
+
     if (draggedNode.type === 'vpc') {
+      // VPC cannot overlap or be nested inside another VPC
+      const vpcCenterX = absX + 300; // 600/2
+      const vpcCenterY = absY + 200; // 400/2
+      let insideAnotherVpc = false;
+      for (const vpc of networkConfig.vpcs) {
+        if (vpc.id === draggedNode.id) continue;
+        if (
+          vpcCenterX >= vpc.position.x &&
+          vpcCenterX <= vpc.position.x + vpc.width &&
+          vpcCenterY >= vpc.position.y &&
+          vpcCenterY <= vpc.position.y + vpc.height
+        ) {
+          insideAnotherVpc = true;
+          break;
+        }
+      }
+
+      if (insideAnotherVpc) {
+        revertNode('Invalid placement: VPC cannot be nested inside another VPC.');
+        return;
+      }
+
       const updatedVpcs = networkConfig.vpcs.map(v => {
         if (v.id === draggedNode.id) {
           return { ...v, position: { x: absX, y: absY } };
         }
         return v;
       });
-      saveNetworkConfig({ ...networkConfig, vpcs: updatedVpcs });
+      const newConfig = { ...networkConfig, vpcs: updatedVpcs };
+      saveNetworkConfig(newConfig);
+      triggerArchitectureAudit(newConfig);
     }
     else if (draggedNode.type === 'subnet') {
       const vpcWidth = 600;
@@ -480,11 +551,43 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         }
       }
 
+      if (!targetVpcId) {
+        revertNode('Invalid placement: Subnets must reside inside a VPC boundary.');
+        return;
+      }
+
+      // Check if dropped inside another subnet
+      let insideAnotherSubnet = false;
+      for (const subnet of networkConfig.subnets) {
+        if (subnet.id === draggedNode.id) continue;
+        let subnetAbsX = subnet.position.x;
+        let subnetAbsY = subnet.position.y;
+        if (subnet.vpcId) {
+          const parentVpc = networkConfig.vpcs.find(v => v.id === subnet.vpcId);
+          if (parentVpc) {
+            subnetAbsX += parentVpc.position.x;
+            subnetAbsY += parentVpc.position.y;
+          }
+        }
+        if (
+          subnetCenterX >= subnetAbsX &&
+          subnetCenterX <= subnetAbsX + subnet.width &&
+          subnetCenterY >= subnetAbsY &&
+          subnetCenterY <= subnetAbsY + subnet.height
+        ) {
+          insideAnotherSubnet = true;
+          break;
+        }
+      }
+
+      if (insideAnotherSubnet) {
+        revertNode('Invalid placement: Subnets cannot be nested inside other subnets.');
+        return;
+      }
+
       const updatedSubnets = networkConfig.subnets.map(s => {
         if (s.id === draggedNode.id) {
-          const finalPos = targetVpcId
-            ? { x: absX - targetVpcPos.x, y: absY - targetVpcPos.y }
-            : { x: absX, y: absY };
+          const finalPos = { x: absX - targetVpcPos.x, y: absY - targetVpcPos.y };
           return {
             ...s,
             vpcId: targetVpcId,
@@ -494,7 +597,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         return s;
       });
 
-      saveNetworkConfig({ ...networkConfig, subnets: updatedSubnets });
+      const newConfig = { ...networkConfig, subnets: updatedSubnets };
+      saveNetworkConfig(newConfig);
+      triggerArchitectureAudit(newConfig);
     }
     else {
       // Container node
@@ -529,6 +634,27 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         }
       }
 
+      // Check if it is inside any VPC directly
+      let targetVpcId: string | null = null;
+      if (!targetSubnetId) {
+        for (const vpc of networkConfig.vpcs) {
+          if (
+            nodeCenterX >= vpc.position.x &&
+            nodeCenterX <= vpc.position.x + 600 &&
+            nodeCenterY >= vpc.position.y &&
+            nodeCenterY <= vpc.position.y + 400
+          ) {
+            targetVpcId = vpc.id;
+            break;
+          }
+        }
+      }
+
+      if (!targetSubnetId && !targetVpcId) {
+        revertNode('Invalid placement: Service nodes must reside inside a VPC boundary.');
+        return;
+      }
+
       const updatedNodeSubnetMap = { ...networkConfig.nodeSubnetMap };
       const updatedSecurityGroups = { ...networkConfig.nodeSecurityGroups };
 
@@ -549,9 +675,11 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       }
 
       localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(positionsRef.current));
-      saveNetworkConfig({ ...networkConfig, nodeSubnetMap: updatedNodeSubnetMap, nodeSecurityGroups: updatedSecurityGroups });
+      const newConfig = { ...networkConfig, nodeSubnetMap: updatedNodeSubnetMap, nodeSecurityGroups: updatedSecurityGroups };
+      saveNetworkConfig(newConfig);
+      triggerArchitectureAudit(newConfig);
     }
-  }, [reactFlowInstance, networkConfig, projectId, saveNetworkConfig]);
+  }, [reactFlowInstance, networkConfig, projectId, saveNetworkConfig, setNodes, triggerArchitectureAudit, showNotification]);
 
   const onNodesDelete = useCallback((deleted: Node[]) => {
     let updatedVpcs = [...networkConfig.vpcs];
@@ -671,6 +799,26 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       });
 
       if (type === 'vpc') {
+        const vpcCenterX = position.x + 300;
+        const vpcCenterY = position.y + 200;
+        let insideAnotherVpc = false;
+        for (const vpc of networkConfig.vpcs) {
+          if (
+            vpcCenterX >= vpc.position.x &&
+            vpcCenterX <= vpc.position.x + vpc.width &&
+            vpcCenterY >= vpc.position.y &&
+            vpcCenterY <= vpc.position.y + vpc.height
+          ) {
+            insideAnotherVpc = true;
+            break;
+          }
+        }
+
+        if (insideAnotherVpc) {
+          showNotification({ type: 'error', message: 'Invalid placement: VPC cannot be nested inside another VPC.' });
+          return;
+        }
+
         const newVpc: VPC = {
           id: `vpc-${Math.random().toString(36).substr(2, 9)}`,
           name: `VPC-${networkConfig.vpcs.length + 1}`,
@@ -678,10 +826,12 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           width: 600,
           height: 400
         };
-        saveNetworkConfig({
+        const newConfig = {
           ...networkConfig,
           vpcs: [...networkConfig.vpcs, newVpc]
-        });
+        };
+        saveNetworkConfig(newConfig);
+        triggerArchitectureAudit(newConfig);
       } else if (type === 'subnet-public' || type === 'subnet-private') {
         const isPublic = type === 'subnet-public';
         const subnetWidth = 260;
@@ -705,14 +855,45 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           }
         }
 
+        if (!targetVpcId) {
+          showNotification({ type: 'error', message: 'Invalid placement: Subnets must reside inside a VPC boundary.' });
+          return;
+        }
+
+        // Check if dropped inside another subnet
+        let insideAnotherSubnet = false;
+        for (const subnet of networkConfig.subnets) {
+          let subnetAbsX = subnet.position.x;
+          let subnetAbsY = subnet.position.y;
+          if (subnet.vpcId) {
+            const parentVpc = networkConfig.vpcs.find(v => v.id === subnet.vpcId);
+            if (parentVpc) {
+              subnetAbsX += parentVpc.position.x;
+              subnetAbsY += parentVpc.position.y;
+            }
+          }
+          if (
+            subnetCenterX >= subnetAbsX &&
+            subnetCenterX <= subnetAbsX + subnet.width &&
+            subnetCenterY >= subnetAbsY &&
+            subnetCenterY <= subnetAbsY + subnet.height
+          ) {
+            insideAnotherSubnet = true;
+            break;
+          }
+        }
+
+        if (insideAnotherSubnet) {
+          showNotification({ type: 'error', message: 'Invalid placement: Subnets cannot be nested inside other subnets.' });
+          return;
+        }
+
         const newSubnet: Subnet = {
           id: `subnet-${Math.random().toString(36).substr(2, 9)}`,
           name: `${isPublic ? 'Public' : 'Private'} Subnet-${networkConfig.subnets.length + 1}`,
           type: isPublic ? 'public' : 'private',
           vpcId: targetVpcId,
-          position: targetVpcId
-            ? { x: position.x - targetVpcPos.x, y: position.y - targetVpcPos.y }
-            : position,
+          position: { x: position.x - targetVpcPos.x, y: position.y - targetVpcPos.y },
           width: subnetWidth,
           height: subnetHeight,
           routes: [
@@ -721,10 +902,12 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           ]
         };
 
-        saveNetworkConfig({
+        const newConfig = {
           ...networkConfig,
           subnets: [...networkConfig.subnets, newSubnet]
-        });
+        };
+        saveNetworkConfig(newConfig);
+        triggerArchitectureAudit(newConfig);
       } else {
         const subnetWidth = 260;
         const subnetHeight = 180;
@@ -757,6 +940,26 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           }
         }
 
+        let targetVpcId: string | null = null;
+        if (!targetSubnetId) {
+          for (const vpc of networkConfig.vpcs) {
+            if (
+              nodeCenterX >= vpc.position.x &&
+              nodeCenterX <= vpc.position.x + 600 &&
+              nodeCenterY >= vpc.position.y &&
+              nodeCenterY <= vpc.position.y + 400
+            ) {
+              targetVpcId = vpc.id;
+              break;
+            }
+          }
+        }
+
+        if (!targetSubnetId && !targetVpcId) {
+          showNotification({ type: 'error', message: 'Invalid placement: Service nodes must reside inside a VPC boundary.' });
+          return;
+        }
+
         const finalDropPos = targetSubnetId
           ? { x: position.x - targetSubnetAbsPos.x, y: position.y - targetSubnetAbsPos.y }
           : position;
@@ -766,7 +969,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         setShowCreateModal(true);
       }
     },
-    [reactFlowInstance, networkConfig, saveNetworkConfig]
+    [reactFlowInstance, networkConfig, saveNetworkConfig, showNotification, triggerArchitectureAudit]
   );
 
   return (
@@ -792,6 +995,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             edges={edges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
+            onNodeDragStart={onNodeDragStart}
             onNodeDragStop={onNodeDragStop}
             onNodesDelete={onNodesDelete}
             onEdgesDelete={onEdgesDelete}
@@ -911,7 +1115,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
               ...networkConfig.nodeSecurityGroups,
               [inspectingSecurityGroup.id]: rules
             };
-            saveNetworkConfig({ ...networkConfig, nodeSecurityGroups: updatedSecurityGroups });
+            const newConfig = { ...networkConfig, nodeSecurityGroups: updatedSecurityGroups };
+            saveNetworkConfig(newConfig);
+            triggerArchitectureAudit(newConfig);
           }}
         />
       )}

@@ -1,0 +1,98 @@
+[
+  {
+    "name": "Connect to Database",
+    "category": "Connection (Beginner)",
+    "description": "Switch context to another database.",
+    "example": "\\c database_name"
+  },
+  {
+    "name": "List Databases",
+    "category": "Connection (Beginner)",
+    "description": "Show all databases in the server.",
+    "example": "\\l"
+  },
+  {
+    "name": "List Tables",
+    "category": "Schema Explorer (Beginner)",
+    "description": "Show all public tables in current database.",
+    "example": "\\dt"
+  },
+  {
+    "name": "Describe Table",
+    "category": "Schema Explorer (Beginner)",
+    "description": "Show columns, types, and indexes of a table.",
+    "example": "\\d table_name"
+  },
+  {
+    "name": "Create Table",
+    "category": "DDL Commands (Beginner)",
+    "description": "Create table with serial auto-increment key.",
+    "example": "CREATE TABLE users (\n  id SERIAL PRIMARY KEY,\n  name VARCHAR(100) NOT NULL,\n  created_at TIMESTAMP DEFAULT NOW()\n);"
+  },
+  {
+    "name": "Insert Data",
+    "category": "DML Queries (Beginner)",
+    "description": "Insert new rows into table.",
+    "example": "INSERT INTO users (name) VALUES ('Alice Smith'), ('Bob Jones');"
+  },
+  {
+    "name": "Select Filter",
+    "category": "DML Queries (Beginner)",
+    "description": "Query records with a filter condition.",
+    "example": "SELECT * FROM users WHERE name LIKE 'A%';"
+  },
+  {
+    "name": "Inner Join",
+    "category": "Joins (Intermediate)",
+    "description": "Select rows having matching keys in both tables.",
+    "example": "SELECT orders.id, users.name\nFROM orders\nINNER JOIN users ON orders.user_id = users.id;"
+  },
+  {
+    "name": "Left Join",
+    "category": "Joins (Intermediate)",
+    "description": "Select all left rows plus matching right rows.",
+    "example": "SELECT users.name, orders.id\nFROM users\nLEFT JOIN orders ON users.id = orders.user_id;"
+  },
+  {
+    "name": "Group and Count",
+    "category": "Aggregations (Intermediate)",
+    "description": "Group rows by category and calculate counts.",
+    "example": "SELECT status, COUNT(*) \nFROM orders \nGROUP BY status;"
+  },
+  {
+    "name": "Create Index",
+    "category": "Optimization (Intermediate)",
+    "description": "Create an index to accelerate search lookups.",
+    "example": "CREATE INDEX idx_users_name ON users(name);"
+  },
+  {
+    "name": "Transactions",
+    "category": "Data Control (Advanced)",
+    "description": "Execute multiple SQL steps as a single atomic unit.",
+    "example": "BEGIN;\nUPDATE accounts SET balance = balance - 100 WHERE id = 1;\nUPDATE accounts SET balance = balance + 100 WHERE id = 2;\nCOMMIT;"
+  },
+  {
+    "name": "Subqueries",
+    "category": "DML Queries (Advanced)",
+    "description": "Nest queries inside outer select clauses.",
+    "example": "SELECT name FROM users \nWHERE id IN (\n  SELECT user_id FROM orders WHERE amount > 500\n);"
+  },
+  {
+    "name": "Common Table Expressions (CTE)",
+    "category": "Complex Queries (Advanced)",
+    "description": "Write temporary tables named blocks using WITH.",
+    "example": "WITH high_spenders AS (\n  SELECT user_id, SUM(amount) as total \n  FROM orders GROUP BY user_id\n)\nSELECT users.name, high_spenders.total \nFROM high_spenders\nJOIN users ON users.id = high_spenders.user_id\nWHERE total > 1000;"
+  },
+  {
+    "name": "Window Functions",
+    "category": "Complex Queries (Advanced)",
+    "description": "Calculate ranks or row indexes across partitioned scopes.",
+    "example": "SELECT name, salary, \n       RANK() OVER (ORDER BY salary DESC) as rank\nFROM employees;"
+  },
+  {
+    "name": "JSONB Querying",
+    "category": "Advanced Types (Advanced)",
+    "description": "Search values inside a JSONB document column.",
+    "example": "SELECT info->>'email' \nFROM clients \nWHERE info @> '{\"status\": \"active\"}';"
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "name": "Switch Database",
+    "category": "Connection (Beginner)",
+    "description": "Switch active database context.",
+    "example": "USE database_name;"
+  },
+  {
+    "name": "List Databases",
+    "category": "Connection (Beginner)",
+    "description": "Show all databases in MySQL server.",
+    "example": "SHOW DATABASES;"
+  },
+  {
+    "name": "List Tables",
+    "category": "Schema Explorer (Beginner)",
+    "description": "Show all tables in current active database.",
+    "example": "SHOW TABLES;"
+  },
+  {
+    "name": "Describe Table Structure",
+    "category": "Schema Explorer (Beginner)",
+    "description": "View column properties and index keys.",
+    "example": "DESCRIBE table_name;"
+  },
+  {
+    "name": "Create Table",
+    "category": "DDL Commands (Beginner)",
+    "description": "Create table with auto-increment primary key.",
+    "example": "CREATE TABLE users (\n  id INT AUTO_INCREMENT PRIMARY KEY,\n  name VARCHAR(100) NOT NULL,\n  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);"
+  },
+  {
+    "name": "Insert Rows",
+    "category": "DML Queries (Beginner)",
+    "description": "Insert new rows into table.",
+    "example": "INSERT INTO users (name) VALUES ('Alice Smith'), ('Bob Jones');"
+  },
+  {
+    "name": "Select Filter & Limit",
+    "category": "DML Queries (Beginner)",
+    "description": "Select rows matching criteria and limit counts.",
+    "example": "SELECT * FROM users WHERE name LIKE 'A%' LIMIT 5;"
+  },
+  {
+    "name": "Inner Join",
+    "category": "Joins (Intermediate)",
+    "description": "Select rows having matching keys in both tables.",
+    "example": "SELECT orders.id, users.name\nFROM orders\nINNER JOIN users ON orders.user_id = users.id;"
+  },
+  {
+    "name": "Left Join",
+    "category": "Joins (Intermediate)",
+    "description": "Select all left rows plus matching right rows.",
+    "example": "SELECT users.name, orders.id\nFROM users\nLEFT JOIN orders ON users.id = orders.user_id;"
+  },
+  {
+    "name": "Group and Count",
+    "category": "Aggregations (Intermediate)",
+    "description": "Group rows by category and calculate counts.",
+    "example": "SELECT status, COUNT(*) \nFROM orders \nGROUP BY status;"
+  },
+  {
+    "name": "Create Index",
+    "category": "Optimization (Intermediate)",
+    "description": "Create an index to accelerate search lookups.",
+    "example": "CREATE INDEX idx_users_name ON users(name);"
+  },
+  {
+    "name": "Transactions",
+    "category": "Data Control (Advanced)",
+    "description": "Execute multiple SQL steps as a single atomic unit.",
+    "example": "START TRANSACTION;\nUPDATE accounts SET balance = balance - 100 WHERE id = 1;\nUPDATE accounts SET balance = balance + 100 WHERE id = 2;\nCOMMIT;"
+  },
+  {
+    "name": "Subqueries",
+    "category": "DML Queries (Advanced)",
+    "description": "Nest queries inside outer select clauses.",
+    "example": "SELECT name FROM users \nWHERE id IN (\n  SELECT user_id FROM orders WHERE amount > 500\n);"
+  },
+  {
+    "name": "EXPLAIN Query Plan",
+    "category": "Optimization (Advanced)",
+    "description": "Analyze query performance and execution paths.",
+    "example": "EXPLAIN SELECT * FROM users WHERE name = 'Alice Smith';"
+  },
+  {
+    "name": "JSON Querying",
+    "category": "Advanced Types (Advanced)",
+    "description": "Retrieve attributes inside a JSON column.",
+    "example": "SELECT JSON_EXTRACT(info, '$.email') \nFROM clients \nWHERE JSON_EXTRACT(info, '$.status') = 'active';"
+  }
+]

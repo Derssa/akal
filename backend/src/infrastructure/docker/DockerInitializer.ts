@@ -3,6 +3,7 @@ import docker from './DockerClient';
 export class DockerInitializer {
   private static readonly UBUNTU_IMAGE_TAG = 'derssa/backend-lab-ubuntu:v1';
   private static readonly POSTGRES_IMAGE_TAG = 'postgres:15-alpine';
+  private static readonly MYSQL_IMAGE_TAG = 'mysql:8.0';
   private static isInitializing = false;
 
   /**
@@ -28,6 +29,7 @@ export class DockerInitializer {
 
       await this.ensureImage(tags, this.UBUNTU_IMAGE_TAG, 'Ubuntu');
       await this.ensureImage(tags, this.POSTGRES_IMAGE_TAG, 'PostgreSQL');
+      await this.ensureImage(tags, this.MYSQL_IMAGE_TAG, 'MySQL');
     } catch (err) {
       console.error('[DockerInitializer] Docker check failed. Is Docker running?');
       throw err;

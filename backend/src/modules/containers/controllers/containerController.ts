@@ -78,4 +78,29 @@ export class ContainerController {
       res.status(500).json({ error: err.message });
     }
   }
+
+  public static async mysqlExplorer(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const explorerData = await ContainerService.getMysqlExplorer(id as string);
+      res.json(explorerData);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  public static async mysqlQuery(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { query, database } = req.body;
+      if (!query) {
+        res.status(400).json({ error: 'Query is required' });
+        return;
+      }
+      const result = await ContainerService.executeMysqlQuery(id as string, database || 'mysql', query);
+      res.json({ result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
 }

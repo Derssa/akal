@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { X, Database, Table, Columns, Play, Copy, Check, Search, BookOpen, Terminal, RefreshCw, AlertCircle, Eye } from 'lucide-react';
 import { API_BASE } from '../../../shared/types';
-import postgresCheatSheet from './data/postgresCheatSheet.json';
+import mysqlCheatSheet from './data/mysqlCheatSheet.json';
 
-interface PostgresModalProps {
+interface MysqlModalProps {
   containerId: string;
   nodeName: string;
   projectId: string;
@@ -26,17 +26,17 @@ interface DBNode {
   error?: boolean;
 }
 
-const CHEAT_SHEET_DATA = postgresCheatSheet;
+const CHEAT_SHEET_DATA = mysqlCheatSheet;
 
-export default function PostgresModal({ containerId, nodeName, projectId, onClose }: PostgresModalProps) {
+export default function MysqlModal({ containerId, nodeName, projectId, onClose }: MysqlModalProps) {
   const [activeTab, setActiveTab] = useState<'explorer' | 'shell' | 'cheatsheet'>('explorer');
   const [explorerData, setExplorerData] = useState<DBNode[]>([]);
   const [loadingExplorer, setLoadingExplorer] = useState(false);
   const [explorerError, setExplorerError] = useState<string | null>(null);
   
   // Shell states
-  const [selectedDb, setSelectedDb] = useState('postgres');
-  const [sqlQuery, setSqlQuery] = useState('SELECT * FROM pg_tables WHERE schemaname = \'public\';');
+  const [selectedDb, setSelectedDb] = useState('mysql');
+  const [sqlQuery, setSqlQuery] = useState('SHOW TABLES;');
   const [queryOutput, setQueryOutput] = useState('');
   const [executing, setExecuting] = useState(false);
 
@@ -45,17 +45,23 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   // Database structure expand/collapse maps
-  const [expandedDBs, setExpandedDBs] = useState<Record<string, boolean>>({ postgres: true });
+  const [expandedDBs, setExpandedDBs] = useState<Record<string, boolean>>({});
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
 
   const fetchExplorerData = async () => {
     try {
       setLoadingExplorer(true);
       setExplorerError(null);
-      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/postgres/explorer`);
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/mysql/explorer`);
       if (res.ok) {
         const data = await res.json();
         setExplorerData(data);
+        
+        // Auto expand first db if collapsed
+        if (data.length > 0) {
+          const firstDbName = data[0].database;
+          setExpandedDBs(prev => ({ [firstDbName]: true, ...prev }));
+        }
       } else {
         const errData = await res.json();
         setExplorerError(errData.error || 'Failed to inspect schema');
@@ -76,21 +82,20 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
     let queryToRun = sqlQuery;
     let localConsoleOutput = '';
 
-    // Check for \c or \connect database meta-command
-    const connectRegex = /^\s*\\(?:c|connect)\s+([a-zA-Z0-9_"\-]+)/m;
-    const match = sqlQuery.match(connectRegex);
+    // Check for USE <database> statement
+    const useRegex = /^\s*use\s+([a-zA-Z0-9_"\-]+);?/i;
+    const match = sqlQuery.match(useRegex);
     if (match) {
       const dbName = match[1].replace(/"/g, ''); // strip optional quotes
       targetDb = dbName;
       setSelectedDb(dbName);
-      // Remove the switch command from the query text that gets sent to the server
-      queryToRun = sqlQuery.replace(connectRegex, '').trim();
+      // Remove switch command from query string
+      queryToRun = sqlQuery.replace(useRegex, '').trim();
       localConsoleOutput = `Switched database connection context to "${dbName}".\n`;
     }
 
     if (!queryToRun) {
       setQueryOutput(`${localConsoleOutput}No SQL statements left to run.`);
-      // Refresh explorer in case database was just created or switched
       fetchExplorerData();
       return;
     }
@@ -98,7 +103,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
     try {
       setExecuting(true);
       setQueryOutput(localConsoleOutput + 'Executing query in container...');
-      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/postgres/query`, {
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/mysql/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: queryToRun, database: targetDb })
@@ -106,7 +111,6 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
       const data = await res.json();
       if (res.ok) {
         setQueryOutput(localConsoleOutput + (data.result || 'Query executed successfully with no output.'));
-        // Refresh explorer in background to capture structural changes
         fetchExplorerData();
       } else {
         setQueryOutput(localConsoleOutput + `ERROR: ${data.error}`);
@@ -127,7 +131,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
     try {
       setExecuting(true);
       setQueryOutput('Executing query in container...');
-      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/postgres/query`, {
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/mysql/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, database })
@@ -159,7 +163,6 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
     setExpandedTables(prev => ({ ...prev, [tblKey]: !prev[tblKey] }));
   };
 
-  // Filtered Cheatsheet
   const filteredCheatSheet = CHEAT_SHEET_DATA.filter(item => {
     const query = cheatQuery.toLowerCase();
     return (
@@ -224,60 +227,64 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                       Retry Schema Scan
                     </button>
                   </div>
-                ) : explorerData.map(node => (
-                  <div key={node.database} style={styles.treeNode}>
-                    <div style={styles.treeRow} onClick={() => toggleDBExpand(node.database)}>
-                      <Database size={16} color="#3B82F6" style={{ marginRight: 8 }} />
-                      <span style={styles.dbName}>{node.database}</span>
-                      {node.error && <AlertCircle size={14} color="#EF4444" style={{ marginLeft: 8 }} title="Database offline/unreachable" />}
-                    </div>
-
-                    {expandedDBs[node.database] && (
-                      <div style={styles.treeChildren}>
-                        {node.tables.length > 0 ? (
-                          node.tables.map(table => {
-                            const tblKey = `${node.database}:${table.name}`;
-                            return (
-                              <div key={table.name} style={styles.treeNode}>
-                                <div style={styles.treeRow} onClick={() => toggleTableExpand(tblKey)}>
-                                  <Table size={14} color="#10B981" style={{ marginRight: 8 }} />
-                                  <span style={styles.tableName}>{table.name}</span>
-                                  
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation(); // prevent collapsing the node
-                                      handleViewTableData(node.database, table.name);
-                                    }}
-                                    style={styles.inlineViewBtn}
-                                    title="View Table Data (SQL Shell)"
-                                    className="glass"
-                                  >
-                                    <Eye size={12} style={{ marginRight: 4 }} />
-                                    View Data
-                                  </button>
-                                </div>
-
-                                {expandedTables[tblKey] && (
-                                  <div style={styles.treeChildren}>
-                                    {table.columns.map(col => (
-                                      <div key={col.name} style={styles.columnRow}>
-                                        <Columns size={12} color="var(--color-text-muted)" style={{ marginRight: 8 }} />
-                                        <span style={styles.columnName}>{col.name}</span>
-                                        <span style={styles.columnType}>{col.type}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })
-                        ) : (
-                          <div style={styles.treeRowEmpty}>No public tables found.</div>
-                        )}
+                ) : explorerData.length > 0 ? (
+                  explorerData.map(node => (
+                    <div key={node.database} style={styles.treeNode}>
+                      <div style={styles.treeRow} onClick={() => toggleDBExpand(node.database)}>
+                        <Database size={16} color="#F29111" style={{ marginRight: 8 }} />
+                        <span style={styles.dbName}>{node.database}</span>
+                        {node.error && <AlertCircle size={14} color="#EF4444" style={{ marginLeft: 8 }} title="Database offline/unreachable" />}
                       </div>
-                    )}
-                  </div>
-                ))}
+
+                      {expandedDBs[node.database] && (
+                        <div style={styles.treeChildren}>
+                          {node.tables.length > 0 ? (
+                            node.tables.map(table => {
+                              const tblKey = `${node.database}:${table.name}`;
+                              return (
+                                <div key={table.name} style={styles.treeNode}>
+                                  <div style={styles.treeRow} onClick={() => toggleTableExpand(tblKey)}>
+                                    <Table size={14} color="#10B981" style={{ marginRight: 8 }} />
+                                    <span style={styles.tableName}>{table.name}</span>
+                                    
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewTableData(node.database, table.name);
+                                      }}
+                                      style={styles.inlineViewBtn}
+                                      title="View Table Data (SQL Shell)"
+                                      className="glass"
+                                    >
+                                      <Eye size={12} style={{ marginRight: 4 }} />
+                                      View Data
+                                    </button>
+                                  </div>
+
+                                  {expandedTables[tblKey] && (
+                                    <div style={styles.treeChildren}>
+                                      {table.columns.map(col => (
+                                        <div key={col.name} style={styles.columnRow}>
+                                          <Columns size={12} color="var(--color-text-muted)" style={{ marginRight: 8 }} />
+                                          <span style={styles.columnName}>{col.name}</span>
+                                          <span style={styles.columnType}>{col.type}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div style={styles.treeRowEmpty}>No tables found.</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div style={styles.treeRowEmpty}>No user databases discovered. Create one using the shell!</div>
+                )}
               </div>
             </div>
           )}
@@ -293,10 +300,13 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                     onChange={(e) => setSelectedDb(e.target.value)}
                     style={styles.select}
                   >
+                    <option value="mysql">mysql</option>
                     {explorerData.map(dbNode => (
-                      <option key={dbNode.database} value={dbNode.database}>
-                        {dbNode.database}
-                      </option>
+                      dbNode.database !== 'mysql' && (
+                        <option key={dbNode.database} value={dbNode.database}>
+                          {dbNode.database}
+                        </option>
+                      )
                     ))}
                   </select>
                 </div>
@@ -313,7 +323,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
               <textarea
                 value={sqlQuery}
                 onChange={(e) => setSqlQuery(e.target.value)}
-                placeholder="Write your SQL statements here..."
+                placeholder="Write your MySQL SQL statements here..."
                 style={styles.sqlTextarea}
               />
 
@@ -332,7 +342,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                   <Search size={15} color="var(--color-text-muted)" style={styles.searchIcon} />
                   <input
                     type="text"
-                    placeholder="Search SQL commands or concepts..."
+                    placeholder="Search MySQL commands or concepts..."
                     value={cheatQuery}
                     onChange={(e) => setCheatQuery(e.target.value)}
                     style={styles.searchInput}
@@ -556,7 +566,7 @@ const styles: Record<string, React.CSSProperties> = {
     outline: 'none',
   },
   runBtn: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#F29111',
     color: '#FFF',
     border: 'none',
     borderRadius: '6px',
@@ -566,7 +576,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
-    boxShadow: '0 1px 3px rgba(16, 185, 129, 0.3)',
+    boxShadow: '0 1px 3px rgba(242, 145, 17, 0.3)',
   },
   sqlTextarea: {
     width: '100%',

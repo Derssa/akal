@@ -1,4 +1,4 @@
-import { Server, ArrowLeft, RefreshCw, Save, Plus } from 'lucide-react';
+import { Server, ArrowLeft, RefreshCw, Save, Plus, Network } from 'lucide-react';
 
 interface CanvasTopbarProps {
   projectName: string;
@@ -7,6 +7,7 @@ interface CanvasTopbarProps {
   onBack: () => void;
   onRefresh: () => void;
   onSave: () => void;
+  onConfigureVpc: () => void;
 }
 
 export default function CanvasTopbar({
@@ -16,6 +17,7 @@ export default function CanvasTopbar({
   onBack,
   onRefresh,
   onSave,
+  onConfigureVpc,
 }: CanvasTopbarProps) {
   return (
     <div style={styles.topbar} className="glass">
@@ -36,6 +38,11 @@ export default function CanvasTopbar({
           title="Refresh Nodes"
         >
           <RefreshCw size={16} className={loading ? 'spin' : ''} />
+        </button>
+
+        <button onClick={onConfigureVpc} style={styles.saveBtn} title="Configure VPC Settings">
+          <Network size={16} style={{ marginRight: 6 }} />
+          VPC Settings
         </button>
 
         <button onClick={onSave} style={styles.saveBtn} title="Save Layout Locally">

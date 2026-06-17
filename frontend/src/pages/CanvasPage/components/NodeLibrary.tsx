@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Server, Database, Library } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Server, Database, Library, Network } from 'lucide-react';
 
 interface NodeLibraryProps {
   onCollapseChange?: (collapsed: boolean) => void;
@@ -72,27 +72,97 @@ export default function NodeLibrary({ onCollapseChange }: NodeLibraryProps) {
                 <span style={styles.nodeDesc}>Relational DB + Shell</span>
               </div>
             </div>
+            <div
+              draggable
+              onDragStart={(e) => handleDragStart(e, 'mysql')}
+              style={styles.draggableNode}
+            >
+              <div style={styles.iconBox} className="glass">
+                <Database size={18} color="#F29111" />
+              </div>
+              <div style={styles.nodeInfo}>
+                <span style={styles.nodeName}>MySQL</span>
+                <span style={styles.nodeDesc}>Oracle DB + Shell</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Category: Networking */}
+          <div style={styles.category}>
+            <span style={styles.categoryTitle}>Networking</span>
+            
+            <div
+              draggable
+              onDragStart={(e) => handleDragStart(e, 'subnet-public')}
+              style={styles.draggableNode}
+            >
+              <div style={styles.iconBox} className="glass">
+                <Network size={18} color="#10B981" />
+              </div>
+              <div style={styles.nodeInfo}>
+                <span style={styles.nodeName}>Public Subnet</span>
+                <span style={styles.nodeDesc}>Allows public access</span>
+              </div>
+            </div>
+
+            <div
+              draggable
+              onDragStart={(e) => handleDragStart(e, 'subnet-private')}
+              style={styles.draggableNode}
+            >
+              <div style={styles.iconBox} className="glass">
+                <Network size={18} color="#F59E0B" />
+              </div>
+              <div style={styles.nodeInfo}>
+                <span style={styles.nodeName}>Private Subnet</span>
+                <span style={styles.nodeDesc}>Internal instances only</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {isCollapsed && (
         <div style={styles.collapsedIcons}>
-          <div 
-            draggable 
+          <div
+            draggable
             onDragStart={(e) => handleDragStart(e, 'ubuntu')}
             style={styles.collapsedIconNode}
             title="Drag Ubuntu Server"
           >
             <Server size={20} color="#3B82F6" />
           </div>
-          <div 
-            draggable 
+          <div
+            draggable
             onDragStart={(e) => handleDragStart(e, 'postgres')}
             style={styles.collapsedIconNode}
             title="Drag PostgreSQL"
           >
             <Database size={20} color="#10B981" />
+          </div>
+          <div
+            draggable
+            onDragStart={(e) => handleDragStart(e, 'mysql')}
+            style={styles.collapsedIconNode}
+            title="Drag MySQL"
+          >
+            <Database size={20} color="#F29111" />
+          </div>
+          <div
+            draggable
+            onDragStart={(e) => handleDragStart(e, 'subnet-public')}
+            style={styles.collapsedIconNode}
+            title="Drag Public Subnet"
+          >
+            <Network size={20} color="#10B981" />
+          </div>
+          <div
+            draggable
+            onDragStart={(e) => handleDragStart(e, 'subnet-private')}
+            style={styles.collapsedIconNode}
+            title="Drag Private Subnet"
+          >
+            <Network size={20} color="#F59E0B" />
           </div>
         </div>
       )}

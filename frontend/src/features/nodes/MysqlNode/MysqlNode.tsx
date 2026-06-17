@@ -2,11 +2,11 @@ import { Handle, Position } from '@xyflow/react';
 import { Play, Square, Trash2, Database, Search, Shield } from 'lucide-react';
 import styles from '../UbuntuNode/UbuntuNode.module.css'; // Reuse core card styles for visual parity!
 
-interface PostgresNodeProps {
+interface MysqlNodeProps {
   data: any; // Use any to support onSecurityGroupOpen prop dynamically
 }
 
-export default function PostgresNode({ data }: PostgresNodeProps) {
+export default function MysqlNode({ data }: MysqlNodeProps) {
   const isRunning = data.state === 'running';
 
   return (
@@ -15,7 +15,7 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
 
       <div className={styles.header}>
         <div className={styles.titleContainer}>
-          <Database size={18} color={isRunning ? '#10B981' : '#6B7280'} />
+          <Database size={18} color={isRunning ? '#F29111' : '#6B7280'} />
           <span className={styles.title}>{data.name}</span>
           <button
             onClick={(e) => {
@@ -53,7 +53,7 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
 
       <div className={styles.details}>
         <span className={styles.label}>Port:</span>
-        <span className={styles.value}>5432</span>
+        <span className={styles.value}>3306</span>
       </div>
 
       <div className={styles.actions}>
@@ -62,7 +62,7 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
             <button
               onClick={() => data.onInspect(data.id, data.name)}
               className={`${styles.btn} ${styles.btnPrimary}`}
-              style={{ backgroundColor: '#10B981' }} // Postgres Green
+              style={{ backgroundColor: '#F29111' }} // MySQL Orange
               title="Inspect Database Explorer / Shell"
             >
               <Search size={14} style={{ marginRight: 4 }} />

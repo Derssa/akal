@@ -1,19 +1,61 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Modal from './Modal';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 
 interface ToastNotificationProps {
+  type: 'error' | 'warning' | 'success';
   message: string;
   onDismiss: () => void;
 }
 
-export function ToastNotification({ message, onDismiss }: ToastNotificationProps) {
+export function ToastNotification({ type, message, onDismiss }: ToastNotificationProps) {
+  const getThemeStyles = () => {
+    switch (type) {
+      case 'success':
+        return {
+          border: '1px solid #10B981',
+          background: 'rgba(240, 253, 250, 0.96)',
+          color: '#065F46',
+          iconColor: '#10B981',
+          Icon: CheckCircle
+        };
+      case 'warning':
+        return {
+          border: '1px solid #F59E0B',
+          background: 'rgba(255, 251, 235, 0.96)',
+          color: '#92400E',
+          iconColor: '#F59E0B',
+          Icon: AlertTriangle
+        };
+      case 'error':
+      default:
+        return {
+          border: '1px solid #EF4444',
+          background: 'rgba(254, 242, 242, 0.96)',
+          color: '#991B1B',
+          iconColor: '#EF4444',
+          Icon: XCircle
+        };
+    }
+  };
+
+  const theme = getThemeStyles();
+  const Icon = theme.Icon;
+
   return (
     <div style={toastStyles.wrapper}>
-      <div style={toastStyles.toast}>
-        <CheckCircle size={16} color="var(--color-success)" />
+      <div style={{
+        ...toastStyles.toast,
+        border: theme.border,
+        background: theme.background,
+        color: theme.color,
+      }}>
+        <Icon size={16} color={theme.iconColor} style={{ flexShrink: 0 }} />
         <span style={toastStyles.text}>{message}</span>
-        <button onClick={onDismiss} style={toastStyles.dismiss}>✕</button>
+        <button onClick={onDismiss} style={{
+          ...toastStyles.dismiss,
+          color: theme.color
+        }}>✕</button>
       </div>
     </div>
   );
@@ -33,14 +75,11 @@ const toastStyles: Record<string, React.CSSProperties> = {
     gap: '10px',
     padding: '12px 18px',
     borderRadius: '12px',
-    background: 'rgba(255, 255, 255, 0.92)',
     backdropFilter: 'blur(16px)',
     WebkitBackdropFilter: 'blur(16px)',
-    border: '1px solid rgba(0, 0, 0, 0.06)',
     boxShadow: '0 8px 32px -8px rgba(0, 0, 0, 0.12)',
     fontSize: '13px',
-    fontWeight: 500,
-    color: 'var(--color-text-primary)',
+    fontWeight: 600,
   },
   text: {
     flex: 1,
@@ -48,7 +87,6 @@ const toastStyles: Record<string, React.CSSProperties> = {
   dismiss: {
     background: 'none',
     border: 'none',
-    color: 'var(--color-text-muted)',
     cursor: 'pointer',
     fontSize: '12px',
     padding: '2px',
@@ -56,18 +94,37 @@ const toastStyles: Record<string, React.CSSProperties> = {
   },
 };
 
+interface NotificationData {
+  type: 'error' | 'warning' | 'success';
+  message: string;
+}
+
 // Hook for toast management
 export function useToast() {
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<NotificationData | null>(null);
 
-  const showToast = (message: string, duration = 3000) => {
-    setToast(message);
-    setTimeout(() => setToast(null), duration);
-  };
+  const showNotification = useCallback(({ type, message }: NotificationData, duration = 4000) => {
+    setToast({ type, message });
+    const timer = setTimeout(() => setToast(null), duration);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const dismissToast = () => setToast(null);
+  const showToast = useCallback((message: string, duration = 4000) => {
+    let type: 'error' | 'warning' | 'success' = 'success';
+    const lower = message.toLowerCase();
+    if (lower.includes('failed') || lower.includes('error') || lower.includes('invalid') || lower.includes('cannot')) {
+      type = 'error';
+    } else if (lower.includes('warning') || lower.includes('expose') || lower.includes('risk') || lower.includes('alert')) {
+      type = 'warning';
+    }
+    setToast({ type, message });
+    const timer = setTimeout(() => setToast(null), duration);
+    return () => clearTimeout(timer);
+  }, []);
 
-  return { toast, showToast, dismissToast };
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  return { toast, showNotification, showToast, dismissToast };
 }
 
 export default Modal;

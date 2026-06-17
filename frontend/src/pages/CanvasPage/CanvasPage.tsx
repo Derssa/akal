@@ -22,7 +22,8 @@ import SubnetNode from '../../features/nodes/SubnetNode/SubnetNode';
 import RoutingTableModal from '../../features/nodes/SubnetNode/RoutingTableModal';
 import SecurityGroupsModal from '../../features/nodes/SecurityGroups/SecurityGroupsModal';
 import type { SecurityGroupRule } from '../../features/nodes/SecurityGroups/SecurityGroupsModal';
-import VpcModal, { VPCConfig } from '../../features/nodes/VpcNode/VpcModal';
+import VpcModal from '../../features/nodes/VpcNode/VpcModal';
+import type { VPCConfig } from '../../features/nodes/VpcNode/VpcModal';
 import { validateArchitecture } from '../../shared/utils/architectureValidator';
 
 interface CanvasPageProps {

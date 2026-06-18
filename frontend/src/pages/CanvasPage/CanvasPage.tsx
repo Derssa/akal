@@ -539,10 +539,10 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         const defaultX = 150 + (index % 3) * 280;
         const defaultY = 150 + Math.floor(index / 3) * 220;
         
-        const savedPos = positionsRef.current[c.id];
+        const savedPos = positionsRef.current[c.name];
         const dropPos = dropPositionsRef.current[c.name];
         if (dropPos) {
-          positionsRef.current[c.id] = dropPos;
+          positionsRef.current[c.name] = dropPos;
           delete dropPositionsRef.current[c.name];
         }
 
@@ -557,7 +557,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           const cols = subnet?.columns || 2;
           const rows = subnet?.rows || 1;
 
-          const pos = positionsRef.current[c.id];
+          const pos = positionsRef.current[c.name];
           let col = -1;
           let row = -1;
           if (pos) {
@@ -569,7 +569,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             return containers.some(node => {
               if (node.id === excludeId) return false;
               if (updatedNodeSubnetMap[node.id] !== parentId) return false;
-              const nodePos = positionsRef.current[node.id];
+              const nodePos = positionsRef.current[node.name];
               if (!nodePos) return false;
               const nCol = Math.round((nodePos.x - 60) / 340);
               const nRow = Math.round((nodePos.y - 60) / 190);
@@ -600,7 +600,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             x: 60 + col * 340,
             y: 60 + row * 190
           };
-          positionsRef.current[c.id] = position;
+          positionsRef.current[c.name] = position;
         }
 
         const nodeType = c.type || 'ubuntu';
@@ -637,6 +637,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
 
       return [...subnetNodes, ...containerNodes];
     });
+
+    // Save current positions (including auto-placed new nodes) to localStorage
+    localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(positionsRef.current));
   }, [containers, startContainer, stopContainer, onTerminalOpen, setNodes, networkConfig, saveNetworkConfig, handleDeleteSubnet, handleSubnetResize]);
 
   // Recursively calculate absolute coordinates of a node
@@ -743,9 +746,10 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       }
     }
 
+    const key = (draggedNode.type === 'subnet' ? draggedNode.id : draggedNode.data?.name) as string;
     const currentPositions = {
       ...positionsRef.current,
-      [draggedNode.id]: tempPos
+      [key]: tempPos
     };
 
     const tempConfig = {
@@ -914,7 +918,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         const col = Math.max(0, Math.min(cols - 1, Math.round((relX - 60) / 340)));
         const row = Math.max(0, Math.min(rows - 1, Math.round((relY - 60) / 190)));
 
-        positionsRef.current[draggedNode.id] = {
+        const key = (draggedNode.type === 'subnet' ? draggedNode.id : draggedNode.data?.name) as string;
+        positionsRef.current[key] = {
           x: 60 + col * 340,
           y: 60 + row * 190
         };
@@ -925,7 +930,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         }
       } else {
         delete updatedNodeSubnetMap[draggedNode.id];
-        positionsRef.current[draggedNode.id] = { x: absX, y: absY };
+        const key = (draggedNode.type === 'subnet' ? draggedNode.id : draggedNode.data?.name) as string;
+        positionsRef.current[key] = { x: absX, y: absY };
       }
 
       localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(positionsRef.current));

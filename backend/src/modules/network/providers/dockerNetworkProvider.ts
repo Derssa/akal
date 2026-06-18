@@ -65,7 +65,7 @@ export class DockerNetworkProvider implements NetworkProvider {
       if (!containerId) continue;
 
       // Check if iptables is available inside this container
-      const hasIptables = await this.runExec(containerId, ['which', 'iptables']);
+      const hasIptables = await this.runExec(containerId, ['sh', '-c', 'command -v iptables']);
       if (!hasIptables || hasIptables.includes('not found') || hasIptables.trim() === '') {
         console.warn(`[DockerNetworkProvider] Skipping firewall configuration for container ${containerId.slice(0, 12)} (${ep.containerName}): 'iptables' is not installed.`);
         continue;
@@ -170,7 +170,7 @@ export class DockerNetworkProvider implements NetworkProvider {
       );
       if (containerInfo && containerInfo.State === 'running') {
         const containerId = containerInfo.Id;
-        const hasIptables = await this.runExec(containerId, ['which', 'iptables']);
+        const hasIptables = await this.runExec(containerId, ['sh', '-c', 'command -v iptables']);
         if (hasIptables && !hasIptables.includes('not found') && hasIptables.trim() !== '') {
           // Flush custom chains
           await this.runExec(containerId, ['iptables', '-F', 'AKAL-INPUT']);

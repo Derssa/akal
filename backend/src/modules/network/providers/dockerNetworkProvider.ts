@@ -37,29 +37,7 @@ export class DockerNetworkProvider implements NetworkProvider {
   public async applyPlan(projectId: string, endpoints: VirtualEndpoint[], intents: NetworkIntent[], config: any): Promise<void> {
     console.log(`[DockerNetworkProvider] Applying network plan for project: ${projectId}`);
 
-    // Ensure Docker host-level forwarding and NAT bypass are applied dynamically to prevent Docker resets from wiping them
-    try {
-      const temp = await docker.createContainer({
-        Image: 'derssa/backend-lab-ubuntu:v1',
-        HostConfig: {
-          Privileged: true,
-          NetworkMode: 'host',
-          AutoRemove: true
-        },
-        Cmd: [
-          'sh',
-          '-c',
-          'iptables -C FORWARD -j ACCEPT 2>/dev/null || iptables -I FORWARD -j ACCEPT && ' +
-          'iptables -t nat -D POSTROUTING -s 10.0.0.0/8 -d 10.0.0.0/8 -j ACCEPT 2>/dev/null; iptables -t nat -I POSTROUTING -s 10.0.0.0/8 -d 10.0.0.0/8 -j ACCEPT && ' +
-          'iptables -t nat -D POSTROUTING -s 172.16.0.0/12 -d 172.16.0.0/12 -j ACCEPT 2>/dev/null; iptables -t nat -I POSTROUTING -s 172.16.0.0/12 -d 172.16.0.0/12 -j ACCEPT && ' +
-          'iptables -t nat -D POSTROUTING -s 192.168.0.0/16 -d 192.168.0.0/16 -j ACCEPT 2>/dev/null; iptables -t nat -I POSTROUTING -s 192.168.0.0/16 -d 192.168.0.0/16 -j ACCEPT'
-        ]
-      });
-      await temp.start();
-    } catch (err) {
-      console.warn('[DockerNetworkProvider] Failed to apply host iptables forwarding/NAT bypass:', err);
-    }
-    
+
     const dockerContainers = await docker.listContainers({ all: true });
     const ipMap: Record<string, string> = {};
     const idMap: Record<string, string> = {};
@@ -197,6 +175,30 @@ export class DockerNetworkProvider implements NetworkProvider {
       }
     }
 
+    // Ensure Docker host-level forwarding and NAT bypass are applied dynamically to prevent Docker resets from wiping them
+    // This is run after all container connections to override any Docker-inserted POSTROUTING rules.
+    try {
+      const temp = await docker.createContainer({
+        Image: 'derssa/backend-lab-ubuntu:v1',
+        HostConfig: {
+          Privileged: true,
+          NetworkMode: 'host',
+          AutoRemove: true
+        },
+        Cmd: [
+          'sh',
+          '-c',
+          'iptables -C FORWARD -j ACCEPT 2>/dev/null || iptables -I FORWARD -j ACCEPT && ' +
+          'iptables -t nat -D POSTROUTING -s 10.0.0.0/8 -d 10.0.0.0/8 -j ACCEPT 2>/dev/null; iptables -t nat -I POSTROUTING -s 10.0.0.0/8 -d 10.0.0.0/8 -j ACCEPT && ' +
+          'iptables -t nat -D POSTROUTING -s 172.16.0.0/12 -d 172.16.0.0/12 -j ACCEPT 2>/dev/null; iptables -t nat -I POSTROUTING -s 172.16.0.0/12 -d 172.16.0.0/12 -j ACCEPT && ' +
+          'iptables -t nat -D POSTROUTING -s 192.168.0.0/16 -d 192.168.0.0/16 -j ACCEPT 2>/dev/null; iptables -t nat -I POSTROUTING -s 192.168.0.0/16 -d 192.168.0.0/16 -j ACCEPT'
+        ]
+      });
+      await temp.start();
+    } catch (err) {
+      console.warn('[DockerNetworkProvider] Failed to apply host iptables forwarding/NAT bypass:', err);
+    }
+
     // 4. Build IP map and ID map using updated network inspects
     const updatedDockerContainers = await docker.listContainers({ all: true });
     for (const ep of endpoints) {
@@ -221,6 +223,9 @@ export class DockerNetworkProvider implements NetworkProvider {
       const containerId = idMap[ep.nodeId];
       if (!containerId) continue;
 
+      const containerInfo = updatedDockerContainers.find(c => c.Id === containerId);
+      if (!containerInfo) continue;
+
       // Check if iptables is available inside this container
       const hasIptables = await this.runExec(containerId, ['sh', '-c', 'command -v iptables']);
       if (!hasIptables || hasIptables.includes('not found') || hasIptables.trim() === '') {
@@ -238,9 +243,33 @@ export class DockerNetworkProvider implements NetworkProvider {
       await this.runExec(containerId, ['iptables', '-F', 'AKAL-INPUT']);
       await this.runExec(containerId, ['iptables', '-F', 'AKAL-OUTPUT']);
 
+      const isDnsEnabled = config.vpcConfig?.dnsEnabled !== false;
+
+      // 1.5 Configure /etc/hosts for cross-subnet DNS resolution (using true node names)
+      const selfNodeName = containerInfo.Names[0].replace(/^\//, '').replace(`akal-lab-${projectId}-`, '');
+      const hostsContent = [
+        '127.0.0.1 localhost',
+        '::1 localhost ip6-localhost ip6-loopback',
+        `${ipMap[ep.nodeId]} ${selfNodeName}`
+      ];
+
+      if (isDnsEnabled) {
+        for (const otherEp of endpoints) {
+          if (otherEp.nodeId === ep.nodeId) continue;
+          const otherIp = ipMap[otherEp.nodeId];
+          const otherContainerInfo = updatedDockerContainers.find(c => c.Id === idMap[otherEp.nodeId]);
+          if (otherIp && otherContainerInfo) {
+            const otherNodeName = otherContainerInfo.Names[0].replace(/^\//, '').replace(`akal-lab-${projectId}-`, '');
+            hostsContent.push(`${otherIp} ${otherNodeName}`);
+          }
+        }
+      }
+
+      const hostsStr = hostsContent.join('\n');
+      await this.runExec(containerId, ['sh', '-c', `cat << 'EOF' > /etc/hosts\n${hostsStr}\nEOF`]);
+
       // DNS Control: If DNS resolution is disabled, drop outbound port 53 traffic (DNS queries)
       // This is placed before loopback rules to ensure local Docker DNS queries (sent to loopback resolver 127.0.0.11) are blocked.
-      const isDnsEnabled = config.vpcConfig?.dnsEnabled !== false;
       if (!isDnsEnabled) {
         console.log(`[DockerNetworkProvider] DNS is disabled. Blocking Port 53 and local resolver 127.0.0.11 outbound inside container ${containerId.slice(0, 12)}...`);
         await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', '127.0.0.11', '-j', 'REJECT']);
@@ -251,12 +280,35 @@ export class DockerNetworkProvider implements NetworkProvider {
       // 2. Allow established loopback and related connections (essential for container health & pings)
       await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-i', 'lo', '-j', 'ACCEPT']);
       await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-o', 'lo', '-j', 'ACCEPT']);
-      
+      await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', '127.0.0.0/8', '-j', 'ACCEPT']);
+
+      // 2.5. Routing Table & Internet Gateway Enforcement (Evaluated BEFORE conntrack and security groups)
+      const subnetId = config.nodeSubnetMap[ep.nodeId];
+      const subnet = config.subnets?.find((s: any) => s.id === subnetId);
+      const isIgwEnabled = config.vpcConfig?.igwEnabled !== false;
+      const isPublicSubnet = subnet?.type === 'public';
+      const hasIgwRoute = subnet?.routes?.some((r: any) => r.destination === '0.0.0.0/0' && r.target === 'igw');
+      const hasLocalRoute = subnet?.routes?.some((r: any) => r.destination === (config.vpcConfig?.cidr || '10.0.0.0/16') && r.target === 'local');
+
+      const isInternetAllowed = isIgwEnabled && isPublicSubnet && hasIgwRoute;
+      const vpcCidr = config.vpcConfig?.cidr || '10.0.0.0/16';
+
+      if (!hasLocalRoute) {
+        // Reject local VPC subnet-to-subnet traffic if local route is deleted
+        await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', vpcCidr, '-j', 'REJECT']);
+        await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', vpcCidr, '-j', 'REJECT']);
+      }
+
+      if (!isInternetAllowed) {
+        // Block external internet traffic (anything outside VPC CIDR) if internet access is blocked
+        await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '!', '-d', vpcCidr, '-j', 'REJECT']);
+      }
+
       // Stateful rule tracking
       await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-m', 'conntrack', '--ctstate', 'ESTABLISHED,RELATED', '-j', 'ACCEPT']);
       await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-m', 'conntrack', '--ctstate', 'ESTABLISHED,RELATED', '-j', 'ACCEPT']);
 
-      // 3. Process intents affecting this node
+      // 3. Process intents affecting this node (Security Groups)
       for (const intent of intents) {
         if (intent.ownerNodeId !== ep.nodeId) continue;
 
@@ -312,34 +364,12 @@ export class DockerNetworkProvider implements NetworkProvider {
         }
       }
 
-
-
-      // 5. Internet Access Control (IGW, Private Subnet & Routing Table checks)
-      const subnetId = config.nodeSubnetMap[ep.nodeId];
-      const subnet = config.subnets?.find((s: any) => s.id === subnetId);
-      const isIgwEnabled = config.vpcConfig?.igwEnabled !== false;
-      const isPublicSubnet = subnet?.type === 'public';
-      const hasIgwRoute = subnet?.routes?.some((r: any) => r.destination === '0.0.0.0/0' && r.target === 'igw');
-      const hasLocalRoute = subnet?.routes?.some((r: any) => r.destination === (config.vpcConfig?.cidr || '10.0.0.0/16') && r.target === 'local');
-
-      const isInternetAllowed = isIgwEnabled && isPublicSubnet && hasIgwRoute;
-      const vpcCidr = config.vpcConfig?.cidr || '10.0.0.0/16';
-
-      // Always accept loopback traffic first (includes local DNS)
-      await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', '127.0.0.0/8', '-j', 'ACCEPT']);
-
-      if (hasLocalRoute) {
-        // If local route exists, allow traffic within the VPC
-        await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', vpcCidr, '-j', 'ACCEPT']);
-      } else {
-        // If local route is removed, reject VPC traffic
-        console.log(`[DockerNetworkProvider] Local VPC route is missing. Blocking VPC traffic for container ${containerId.slice(0, 12)}.`);
-        await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', vpcCidr, '-j', 'REJECT']);
-      }
-
+      // 4. Default Outbound Fallthrough policy
       if (isInternetAllowed) {
         await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-j', 'ACCEPT']);
       } else {
+        // If internet is blocked, but the traffic falls through routing/SG checks (so it is local VPC traffic), ACCEPT it.
+        await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', vpcCidr, '-j', 'ACCEPT']);
         await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-j', 'REJECT']);
       }
 

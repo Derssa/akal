@@ -5,6 +5,7 @@ export interface SecurityGroupRule {
   id: string;
   type: 'inbound' | 'outbound';
   action: 'ALLOW' | 'DENY';
+  protocol: 'ALL' | 'TCP' | 'UDP' | 'ICMP';
   port: string; // e.g. "80", "5432", "ALL"
   source: string; // e.g. "0.0.0.0/0", "subnet-id", "node-id"
 }
@@ -35,6 +36,7 @@ export default function SecurityGroupsModal({
     const formData = new FormData(e.currentTarget);
     const type = formData.get('type') as 'inbound' | 'outbound';
     const action = formData.get('action') as 'ALLOW' | 'DENY';
+    const protocol = (formData.get('protocol') || 'ALL') as 'ALL' | 'TCP' | 'UDP' | 'ICMP';
     const port = formData.get('port') as string;
     const source = formData.get('source') as string;
 
@@ -42,11 +44,12 @@ export default function SecurityGroupsModal({
       id: Math.random().toString(36).substr(2, 9),
       type,
       action,
+      protocol,
       port: port || 'ALL',
       source: source || '0.0.0.0/0'
     };
 
-    onSaveRules([...rules, newRule]);
+    onSaveRules([newRule, ...rules]);
     e.currentTarget.reset();
   };
 
@@ -102,6 +105,7 @@ export default function SecurityGroupsModal({
                   <tr style={styles.thRow}>
                     <th style={styles.th}>Direction</th>
                     <th style={styles.th}>Action</th>
+                    <th style={styles.th}>Protocol</th>
                     <th style={styles.th}>Port</th>
                     <th style={styles.th}>Source / Dest</th>
                     <th style={styles.thAction}>Action</th>
@@ -139,6 +143,7 @@ export default function SecurityGroupsModal({
                               {rule.action}
                             </span>
                           </td>
+                          <td style={styles.tdCode}><code>{rule.protocol || 'ALL'}</code></td>
                           <td style={styles.tdCode}><code>{rule.port}</code></td>
                           <td style={styles.td}>{resolvedSource}</td>
                           <td style={styles.tdAction}>
@@ -181,7 +186,7 @@ export default function SecurityGroupsModal({
                     })
                   ) : (
                     <tr style={styles.tr}>
-                      <td colSpan={5} style={styles.tdEmpty}>No rules configured. All traffic is blocked.</td>
+                      <td colSpan={6} style={styles.tdEmpty}>No rules configured. All traffic is blocked.</td>
                     </tr>
                   )}
                 </tbody>
@@ -205,6 +210,16 @@ export default function SecurityGroupsModal({
                 <select name="action" style={styles.select}>
                   <option value="ALLOW">ALLOW</option>
                   <option value="DENY">DENY</option>
+                </select>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Protocol</label>
+                <select name="protocol" style={styles.select}>
+                  <option value="ALL">ALL</option>
+                  <option value="TCP">TCP</option>
+                  <option value="UDP">UDP</option>
+                  <option value="ICMP">ICMP</option>
                 </select>
               </div>
 
@@ -265,7 +280,7 @@ const styles: Record<string, React.CSSProperties> = {
     boxSizing: 'border-box',
   },
   container: {
-    width: '700px',
+    width: '850px',
     maxWidth: '100%',
     borderRadius: '12px',
     display: 'flex',
@@ -355,6 +370,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--color-text-muted)',
     textTransform: 'uppercase',
     borderBottom: '1px solid var(--border-color)',
+    whiteSpace: 'nowrap',
   },
   thAction: {
     textAlign: 'right',
@@ -364,6 +380,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--color-text-muted)',
     textTransform: 'uppercase',
     borderBottom: '1px solid var(--border-color)',
+    whiteSpace: 'nowrap',
   },
   tr: {
     borderBottom: '1px solid var(--border-color)',
@@ -372,16 +389,19 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px 12px',
     fontSize: '12px',
     color: 'var(--color-text-secondary)',
+    whiteSpace: 'nowrap',
   },
   tdCode: {
     padding: '8px 12px',
     fontSize: '12px',
     fontFamily: 'var(--font-mono)',
     color: 'var(--color-text-primary)',
+    whiteSpace: 'nowrap',
   },
   tdAction: {
     padding: '8px 12px',
     textAlign: 'right',
+    whiteSpace: 'nowrap',
   },
   tdEmpty: {
     padding: '16px',

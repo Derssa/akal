@@ -360,13 +360,14 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       id: `rule-${Math.random().toString(36).substr(2, 9)}`,
       type: 'inbound',
       action: 'ALLOW',
+      protocol: 'TCP',
       port: defaultPort,
       source: source
     };
 
     const updatedSecurityGroups = {
       ...networkConfig.nodeSecurityGroups,
-      [target]: [...currentRules, newRule]
+      [target]: [newRule, ...currentRules]
     };
     const newConfig = { ...networkConfig, nodeSecurityGroups: updatedSecurityGroups };
     saveNetworkConfig(newConfig);
@@ -407,6 +408,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         id: `rule-${Math.random().toString(36).substr(2, 9)}`,
         type: 'inbound' as const,
         action: 'DENY' as const,
+        protocol: 'ALL' as const,
         port: 'ALL',
         source: '0.0.0.0/0'
       },
@@ -414,6 +416,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         id: `rule-${Math.random().toString(36).substr(2, 9)}`,
         type: 'outbound' as const,
         action: 'ALLOW' as const,
+        protocol: 'ALL' as const,
         port: 'ALL',
         source: '0.0.0.0/0'
       }

@@ -14,7 +14,7 @@ export class ContainerManager {
   private static LAB_PREFIX = 'akal-lab-';
   private static readonly UBUNTU_IMAGE_TAG = 'derssa/backend-lab-ubuntu:v1';
   private static readonly POSTGRES_IMAGE_TAG = 'derssa/backend-lab-postgres:v1';
-  private static readonly MYSQL_IMAGE_TAG = 'mysql:8.0';
+  private static readonly MYSQL_IMAGE_TAG = 'derssa/backend-lab-mysql:v1';
 
   /**
    * Ensures that the custom prebuilt Ubuntu image exists locally.
@@ -198,6 +198,8 @@ export class ContainerManager {
 
     if (isPostgres) {
       createOpts.Env = ['POSTGRES_PASSWORD=postgres'];
+      createOpts.Entrypoint = ['docker-entrypoint.sh'];
+      createOpts.Cmd = ['postgres'];
       createOpts.HostConfig.PortBindings = {
         '5432/tcp': [{ HostPort: '' }]
       };
@@ -266,7 +268,11 @@ export class ContainerManager {
       });
 
       stream.on('end', () => {
-        resolve(output.trim());
+        let cleanOutput = output.trim();
+        if (cleanOutput.includes("connection to server on socket") || cleanOutput.includes("Is the server running locally")) {
+          cleanOutput = "ERROR: Database server is still starting up. Please wait 5-10 seconds for initialization to complete and try again.";
+        }
+        resolve(cleanOutput);
       });
 
       stream.on('error', (err) => {

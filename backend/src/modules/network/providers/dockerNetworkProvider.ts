@@ -64,6 +64,13 @@ export class DockerNetworkProvider implements NetworkProvider {
       const containerId = idMap[ep.nodeId];
       if (!containerId) continue;
 
+      // Check if iptables is available inside this container
+      const hasIptables = await this.runExec(containerId, ['which', 'iptables']);
+      if (!hasIptables || hasIptables.includes('not found') || hasIptables.trim() === '') {
+        console.warn(`[DockerNetworkProvider] Skipping firewall configuration for container ${containerId.slice(0, 12)} (${ep.containerName}): 'iptables' is not installed.`);
+        continue;
+      }
+
       console.log(`[DockerNetworkProvider] Applying firewall rules inside container ${containerId.slice(0, 12)}...`);
 
       // 1. Initialize custom chains and flush rules
@@ -163,9 +170,12 @@ export class DockerNetworkProvider implements NetworkProvider {
       );
       if (containerInfo && containerInfo.State === 'running') {
         const containerId = containerInfo.Id;
-        // Flush custom chains
-        await this.runExec(containerId, ['iptables', '-F', 'AKAL-INPUT']);
-        await this.runExec(containerId, ['iptables', '-F', 'AKAL-OUTPUT']);
+        const hasIptables = await this.runExec(containerId, ['which', 'iptables']);
+        if (hasIptables && !hasIptables.includes('not found') && hasIptables.trim() !== '') {
+          // Flush custom chains
+          await this.runExec(containerId, ['iptables', '-F', 'AKAL-INPUT']);
+          await this.runExec(containerId, ['iptables', '-F', 'AKAL-OUTPUT']);
+        }
       }
     }
   }

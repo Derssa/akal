@@ -415,7 +415,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '8px',
   },
   tabBtn: {
-    background: 'none',
+    backgroundColor: 'transparent',
     border: 'none',
     borderRadius: '6px',
     color: 'var(--color-text-secondary)',

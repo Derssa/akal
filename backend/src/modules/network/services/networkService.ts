@@ -66,75 +66,23 @@ export class NetworkService {
       for (const sgRule of nodeSgRules) {
         if (sgRule.type === 'outbound') {
           const action = sgRule.action || 'ALLOW';
-          const port = sgRule.port || 'ALL';
+          const sgProto = (sgRule.protocol || 'ALL').toLowerCase() as 'all' | 'tcp' | 'udp' | 'icmp';
+          const port = sgProto === 'icmp' ? 'ALL' : (sgRule.port || 'ALL');
 
-          if (sgRule.source === '0.0.0.0/0') {
-            // Outbound to anywhere
-            for (const dstNodeId of nodeIds) {
-              if (srcNodeId === dstNodeId) continue;
-              rules.push({
-                sourceNodeId: srcNodeId,
-                targetNodeId: dstNodeId,
-                protocol: 'all',
-                port,
-                action,
-                direction: 'outbound',
-                ownerNodeId: srcNodeId
-              });
-              // Only permit icmp (ping) outbound if ALL traffic is allowed
-              if (port === 'ALL') {
-                rules.push({
-                  sourceNodeId: srcNodeId,
-                  targetNodeId: dstNodeId,
-                  protocol: 'icmp',
-                  port: 'ALL',
-                  action,
-                  direction: 'outbound',
-                  ownerNodeId: srcNodeId
-                });
-              }
-            }
-          } else if (sgRule.source.startsWith('subnet-')) {
-            // Outbound to subnet
-            for (const dstNodeId of nodeIds) {
-              if (config.nodeSubnetMap[dstNodeId] === sgRule.source) {
-                rules.push({
-                  sourceNodeId: srcNodeId,
-                  targetNodeId: dstNodeId,
-                  protocol: 'all',
-                  port,
-                  action,
-                  direction: 'outbound',
-                  ownerNodeId: srcNodeId
-                });
-                if (port === 'ALL') {
-                  rules.push({
-                    sourceNodeId: srcNodeId,
-                    targetNodeId: dstNodeId,
-                    protocol: 'icmp',
-                    port: 'ALL',
-                    action,
-                    direction: 'outbound',
-                    ownerNodeId: srcNodeId
-                  });
-                }
-              }
-            }
-          } else {
-            // Outbound to specific node ID
+          const addOutboundRule = (dstId: string) => {
             rules.push({
               sourceNodeId: srcNodeId,
-              targetNodeId: sgRule.source,
-              protocol: 'all',
+              targetNodeId: dstId,
+              protocol: sgProto,
               port,
               action,
               direction: 'outbound',
               ownerNodeId: srcNodeId
             });
-            if (port === 'ALL') {
+            if (sgProto === 'all' && port === 'ALL') {
               rules.push({
                 sourceNodeId: srcNodeId,
-                targetNodeId: sgRule.source,
+                targetNodeId: dstId,
                 protocol: 'icmp',
                 port: 'ALL',
                 action,
@@ -142,6 +90,24 @@ export class NetworkService {
                 ownerNodeId: srcNodeId
               });
             }
+          };
+
+          if (sgRule.source === '0.0.0.0/0') {
+            // Outbound to anywhere
+            for (const dstNodeId of nodeIds) {
+              if (srcNodeId === dstNodeId) continue;
+              addOutboundRule(dstNodeId);
+            }
+          } else if (sgRule.source.startsWith('subnet-')) {
+            // Outbound to subnet
+            for (const dstNodeId of nodeIds) {
+              if (config.nodeSubnetMap[dstNodeId] === sgRule.source) {
+                addOutboundRule(dstNodeId);
+              }
+            }
+          } else {
+            // Outbound to specific node ID
+            addOutboundRule(sgRule.source);
           }
         }
       }
@@ -150,73 +116,22 @@ export class NetworkService {
       for (const sgRule of nodeSgRules) {
         if (sgRule.type === 'inbound') {
           const action = sgRule.action || 'ALLOW';
-          const port = sgRule.port || 'ALL';
+          const sgProto = (sgRule.protocol || 'ALL').toLowerCase() as 'all' | 'tcp' | 'udp' | 'icmp';
+          const port = sgProto === 'icmp' ? 'ALL' : (sgRule.port || 'ALL');
 
-          if (sgRule.source === '0.0.0.0/0') {
-            // Inbound from anywhere
-            for (const dstNodeId of nodeIds) {
-              if (srcNodeId === dstNodeId) continue;
-              rules.push({
-                sourceNodeId: dstNodeId,
-                targetNodeId: srcNodeId,
-                protocol: 'all',
-                port,
-                action,
-                direction: 'inbound',
-                ownerNodeId: srcNodeId
-              });
-              if (port === 'ALL') {
-                rules.push({
-                  sourceNodeId: dstNodeId,
-                  targetNodeId: srcNodeId,
-                  protocol: 'icmp',
-                  port: 'ALL',
-                  action,
-                  direction: 'inbound',
-                  ownerNodeId: srcNodeId
-                });
-              }
-            }
-          } else if (sgRule.source.startsWith('subnet-')) {
-            // Inbound from subnet
-            for (const dstNodeId of nodeIds) {
-              if (config.nodeSubnetMap[dstNodeId] === sgRule.source) {
-                rules.push({
-                  sourceNodeId: dstNodeId,
-                  targetNodeId: srcNodeId,
-                  protocol: 'all',
-                  port,
-                  action,
-                  direction: 'inbound',
-                  ownerNodeId: srcNodeId
-                });
-                if (port === 'ALL') {
-                  rules.push({
-                    sourceNodeId: dstNodeId,
-                    targetNodeId: srcNodeId,
-                    protocol: 'icmp',
-                    port: 'ALL',
-                    action,
-                    direction: 'inbound',
-                    ownerNodeId: srcNodeId
-                  });
-                }
-              }
-            }
-          } else {
-            // Inbound from specific node ID
+          const addInboundRule = (srcId: string) => {
             rules.push({
-              sourceNodeId: sgRule.source,
+              sourceNodeId: srcId,
               targetNodeId: srcNodeId,
-              protocol: 'all',
+              protocol: sgProto,
               port,
               action,
               direction: 'inbound',
               ownerNodeId: srcNodeId
             });
-            if (port === 'ALL') {
+            if (sgProto === 'all' && port === 'ALL') {
               rules.push({
-                sourceNodeId: sgRule.source,
+                sourceNodeId: srcId,
                 targetNodeId: srcNodeId,
                 protocol: 'icmp',
                 port: 'ALL',
@@ -225,6 +140,24 @@ export class NetworkService {
                 ownerNodeId: srcNodeId
               });
             }
+          };
+
+          if (sgRule.source === '0.0.0.0/0') {
+            // Inbound from anywhere
+            for (const dstNodeId of nodeIds) {
+              if (srcNodeId === dstNodeId) continue;
+              addInboundRule(dstNodeId);
+            }
+          } else if (sgRule.source.startsWith('subnet-')) {
+            // Inbound from subnet
+            for (const dstNodeId of nodeIds) {
+              if (config.nodeSubnetMap[dstNodeId] === sgRule.source) {
+                addInboundRule(dstNodeId);
+              }
+            }
+          } else {
+            // Inbound from specific node ID
+            addInboundRule(sgRule.source);
           }
         }
       }

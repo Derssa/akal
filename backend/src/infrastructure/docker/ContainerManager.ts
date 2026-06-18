@@ -173,6 +173,13 @@ export class ContainerManager {
         AutoRemove: false,
         NetworkMode: 'akal-lab-network',
         CapAdd: ['NET_ADMIN']
+      },
+      NetworkingConfig: {
+        EndpointsConfig: {
+          'akal-lab-network': {
+            Aliases: [nodeName]
+          }
+        }
       }
     };
 

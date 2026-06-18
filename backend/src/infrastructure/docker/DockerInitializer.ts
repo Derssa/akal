@@ -61,7 +61,7 @@ export class DockerInitializer {
 
   private static async ensureHostForwarding(): Promise<void> {
     try {
-      console.log('[DockerInitializer] Configuring Docker host to allow forwarding between custom subnets...');
+      console.log('[DockerInitializer] Configuring Docker host to allow forwarding and preserve source IPs...');
       const temp = await docker.createContainer({
         Image: 'alpine',
         HostConfig: {
@@ -69,12 +69,20 @@ export class DockerInitializer {
           NetworkMode: 'host',
           AutoRemove: true
         },
-        Cmd: ['sh', '-c', 'apk add --no-cache iptables && iptables -I FORWARD -j ACCEPT']
+        Cmd: [
+          'sh',
+          '-c',
+          'apk add --no-cache iptables && ' +
+          'iptables -C FORWARD -j ACCEPT 2>/dev/null || iptables -I FORWARD -j ACCEPT && ' +
+          'iptables -t nat -C POSTROUTING -s 10.0.0.0/8 -d 10.0.0.0/8 -j ACCEPT 2>/dev/null || iptables -t nat -I POSTROUTING -s 10.0.0.0/8 -d 10.0.0.0/8 -j ACCEPT && ' +
+          'iptables -t nat -C POSTROUTING -s 172.16.0.0/12 -d 172.16.0.0/12 -j ACCEPT 2>/dev/null || iptables -t nat -I POSTROUTING -s 172.16.0.0/12 -d 172.16.0.0/12 -j ACCEPT && ' +
+          'iptables -t nat -C POSTROUTING -s 192.168.0.0/16 -d 192.168.0.0/16 -j ACCEPT 2>/dev/null || iptables -t nat -I POSTROUTING -s 192.168.0.0/16 -d 192.168.0.0/16 -j ACCEPT'
+        ]
       });
       await temp.start();
-      console.log('[DockerInitializer] Host forwarding rule applied successfully.');
+      console.log('[DockerInitializer] Host forwarding and NAT bypass rules applied successfully.');
     } catch (err) {
-      console.error('[DockerInitializer] Failed to configure host forwarding:', err);
+      console.error('[DockerInitializer] Failed to configure host forwarding/NAT bypass:', err);
     }
   }
 

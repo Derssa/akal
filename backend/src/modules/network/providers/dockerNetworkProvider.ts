@@ -296,17 +296,27 @@ export class DockerNetworkProvider implements NetworkProvider {
       const isIgwEnabled = config.vpcConfig?.igwEnabled !== false;
       const isPublicSubnet = subnet?.type === 'public';
       const hasIgwRoute = subnet?.routes?.some((r: any) => r.destination === '0.0.0.0/0' && r.target === 'igw');
+      const hasLocalRoute = subnet?.routes?.some((r: any) => r.destination === (config.vpcConfig?.cidr || '10.0.0.0/16') && r.target === 'local');
 
       const isInternetAllowed = isIgwEnabled && isPublicSubnet && hasIgwRoute;
+      const vpcCidr = config.vpcConfig?.cidr || '10.0.0.0/16';
 
-      if (!isInternetAllowed) {
-        console.log(`[DockerNetworkProvider] Internet is blocked (IGW disabled, private subnet, or no IGW route) for container ${containerId.slice(0, 12)}.`);
-        const vpcCidr = config.vpcConfig?.cidr || '10.0.0.0/16';
-        await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', '127.0.0.0/8', '-j', 'ACCEPT']);
+      // Always accept loopback traffic first (includes local DNS)
+      await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', '127.0.0.0/8', '-j', 'ACCEPT']);
+
+      if (hasLocalRoute) {
+        // If local route exists, allow traffic within the VPC
         await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', vpcCidr, '-j', 'ACCEPT']);
-        await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-j', 'REJECT']);
       } else {
+        // If local route is removed, reject VPC traffic
+        console.log(`[DockerNetworkProvider] Local VPC route is missing. Blocking VPC traffic for container ${containerId.slice(0, 12)}.`);
+        await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', vpcCidr, '-j', 'REJECT']);
+      }
+
+      if (isInternetAllowed) {
         await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-j', 'ACCEPT']);
+      } else {
+        await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-j', 'REJECT']);
       }
 
       // 6. Default Inbound: REJECT ALL (Zero-trust secure baseline)

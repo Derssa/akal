@@ -9,6 +9,11 @@ export class NetworkService {
   private static provider: NetworkProvider = new DockerNetworkProvider();
   private static policyHashes: Record<string, string> = {};
 
+  public static clearPolicyHash(projectId: string): void {
+    delete this.policyHashes[projectId];
+    console.log(`[NetworkService] Cleared policy hash cache for project: ${projectId}`);
+  }
+
   public static async applyPolicy(projectId: string, config: any): Promise<void> {
     // 1. Performance optimization: Policy Hash Diffing
     const serializedConfig = JSON.stringify(config);

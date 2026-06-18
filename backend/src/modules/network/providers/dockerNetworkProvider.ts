@@ -43,6 +43,8 @@ export class DockerNetworkProvider implements NetworkProvider {
 
     for (const ep of endpoints) {
       const containerInfo = dockerContainers.find(c => 
+        c.Id === ep.nodeId ||
+        c.Id.startsWith(ep.nodeId) ||
         c.Names.some(name => name.replace(/^\//, '') === ep.containerName)
       );
       if (containerInfo && containerInfo.State === 'running') {
@@ -50,7 +52,10 @@ export class DockerNetworkProvider implements NetworkProvider {
         if (netSettings && netSettings.IPAddress) {
           ipMap[ep.nodeId] = netSettings.IPAddress;
           idMap[ep.nodeId] = containerInfo.Id;
+          console.log(`[DockerNetworkProvider] Resolved node ${ep.nodeId} -> Container ${containerInfo.Id.slice(0, 12)} (${netSettings.IPAddress})`);
         }
+      } else {
+        console.log(`[DockerNetworkProvider] Container for node ${ep.nodeId} (${ep.containerName}) is not running or not found.`);
       }
     }
 
@@ -58,6 +63,8 @@ export class DockerNetworkProvider implements NetworkProvider {
     for (const ep of endpoints) {
       const containerId = idMap[ep.nodeId];
       if (!containerId) continue;
+
+      console.log(`[DockerNetworkProvider] Applying firewall rules inside container ${containerId.slice(0, 12)}...`);
 
       // 1. Initialize custom chains and flush rules
       await this.runExec(containerId, ['sh', '-c', 'iptables -N AKAL-INPUT 2>/dev/null || true']);
@@ -77,64 +84,52 @@ export class DockerNetworkProvider implements NetworkProvider {
 
       // 3. Process intents affecting this node
       for (const intent of intents) {
-        if (intent.type === 'ALLOW_CONNECTION') {
-          const proto = intent.protocol === 'all' ? 'tcp' : intent.protocol || 'tcp';
-          const port = intent.port || 'ALL';
+        const action = intent.type.startsWith('ALLOW') ? 'ACCEPT' : 'REJECT';
+        const isTarget = intent.targetNodeId === ep.nodeId;
+        const isSource = intent.sourceNodeId === ep.nodeId;
 
-          if (intent.targetNodeId === ep.nodeId) {
-            // This node is receiving traffic: Allow Inbound
-            const sourceIp = ipMap[intent.sourceNodeId || ''];
-            if (sourceIp) {
-              if (proto === 'icmp') {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', 'icmp', '-j', 'ACCEPT']);
-              } else if (port === 'ALL') {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', proto, '-j', 'ACCEPT']);
-              } else {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', proto, '--dport', port, '-j', 'ACCEPT']);
-              }
+        if (!isTarget && !isSource) continue;
+
+        const rawProto = intent.protocol || 'all';
+        const port = intent.port || 'ALL';
+
+        const sourceIp = isTarget ? ipMap[intent.sourceNodeId || ''] : undefined;
+        const targetIp = isSource ? ipMap[intent.targetNodeId || ''] : undefined;
+
+        // Apply incoming rule
+        if (isTarget && sourceIp) {
+          if (rawProto === 'all' && port === 'ALL') {
+            // Allow/Deny all protocols entirely (TCP, UDP, ICMP)
+            await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-j', action]);
+          } else if (rawProto === 'icmp') {
+            await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', 'icmp', '-j', action]);
+          } else if (rawProto === 'all') {
+            // Apply for both TCP and UDP when specific port is specified
+            await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', 'tcp', '--dport', port, '-j', action]);
+            await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', 'udp', '--dport', port, '-j', action]);
+          } else {
+            if (port === 'ALL') {
+              await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', rawProto, '-j', action]);
+            } else {
+              await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', rawProto, '--dport', port, '-j', action]);
             }
           }
+        }
 
-          if (intent.sourceNodeId === ep.nodeId) {
-            // This node is sending traffic: Allow Outbound
-            const targetIp = ipMap[intent.targetNodeId || ''];
-            if (targetIp) {
-              if (proto === 'icmp') {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', 'icmp', '-j', 'ACCEPT']);
-              } else if (port === 'ALL') {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', proto, '-j', 'ACCEPT']);
-              } else {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', proto, '--dport', port, '-j', 'ACCEPT']);
-              }
-            }
-          }
-        } else if (intent.type === 'DENY_CONNECTION') {
-          const proto = intent.protocol === 'all' ? 'tcp' : intent.protocol || 'tcp';
-          const port = intent.port || 'ALL';
-
-          if (intent.targetNodeId === ep.nodeId) {
-            const sourceIp = ipMap[intent.sourceNodeId || ''];
-            if (sourceIp) {
-              if (proto === 'icmp') {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', 'icmp', '-j', 'REJECT']);
-              } else if (port === 'ALL') {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', proto, '-j', 'REJECT']);
-              } else {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-s', sourceIp, '-p', proto, '--dport', port, '-j', 'REJECT']);
-              }
-            }
-          }
-
-          if (intent.sourceNodeId === ep.nodeId) {
-            const targetIp = ipMap[intent.targetNodeId || ''];
-            if (targetIp) {
-              if (proto === 'icmp') {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', 'icmp', '-j', 'REJECT']);
-              } else if (port === 'ALL') {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', proto, '-j', 'REJECT']);
-              } else {
-                await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', proto, '--dport', port, '-j', 'REJECT']);
-              }
+        // Apply outgoing rule
+        if (isSource && targetIp) {
+          if (rawProto === 'all' && port === 'ALL') {
+            await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-j', action]);
+          } else if (rawProto === 'icmp') {
+            await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', 'icmp', '-j', action]);
+          } else if (rawProto === 'all') {
+            await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', 'tcp', '--dport', port, '-j', action]);
+            await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', 'udp', '--dport', port, '-j', action]);
+          } else {
+            if (port === 'ALL') {
+              await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', rawProto, '-j', action]);
+            } else {
+              await this.runExec(containerId, ['iptables', '-A', 'AKAL-OUTPUT', '-d', targetIp, '-p', rawProto, '--dport', port, '-j', action]);
             }
           }
         }
@@ -145,6 +140,17 @@ export class DockerNetworkProvider implements NetworkProvider {
 
       // 5. Default Inbound: REJECT ALL (Zero-trust secure baseline)
       await this.runExec(containerId, ['iptables', '-A', 'AKAL-INPUT', '-j', 'REJECT']);
+
+      // 6. Verification
+      const iptablesS = await this.runExec(containerId, ['iptables', '-S']);
+      console.log(`[DockerNetworkProvider] Verification output (iptables -S) inside ${containerId.slice(0, 12)}:\n${iptablesS}`);
+
+      if (!iptablesS || !iptablesS.includes('-N AKAL-INPUT') || !iptablesS.includes('-N AKAL-OUTPUT')) {
+        throw new Error(`Firewall verification failed inside container ${containerId.slice(0, 12)}: custom chains were not created/found.`);
+      }
+      
+      const iptablesL = await this.runExec(containerId, ['iptables', '-L', '-n', '-v']);
+      console.log(`[DockerNetworkProvider] Detailed status (iptables -L -n -v) inside ${containerId.slice(0, 12)}:\n${iptablesL}`);
     }
   }
 

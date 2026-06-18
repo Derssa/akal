@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
 import { ContainerService } from '../services/containerService';
+import { ProjectService } from '../../projects/services/projectService';
+import { NetworkService } from '../../network/services/networkService';
+import docker from '../../../infrastructure/docker/DockerClient';
 
 export class ContainerController {
   public static async list(req: Request, res: Response): Promise<void> {
@@ -21,6 +24,16 @@ export class ContainerController {
         return;
       }
       const container = await ContainerService.createContainer(projectId as string, name, type || 'ubuntu');
+      
+      // Auto-reapply policies after creating container so it gets added to mapped endpoints
+      const config = await ProjectService.getNetworkConfig(projectId as string);
+      if (config) {
+        NetworkService.clearPolicyHash(projectId as string);
+        NetworkService.applyPolicy(projectId as string, config).catch(err => {
+          console.error(`Failed to re-apply policy on create:`, err);
+        });
+      }
+
       res.status(201).json(container);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -29,7 +42,27 @@ export class ContainerController {
 
   public static async start(req: Request, res: Response): Promise<void> {
     try {
-      await ContainerService.startContainer(req.params.id as string);
+      const containerId = req.params.id as string;
+      let projectId: string | undefined;
+      try {
+        const inspectData = await docker.getContainer(containerId).inspect();
+        projectId = inspectData.Config.Labels['akal.project.id'];
+      } catch (inspectErr) {
+        console.warn(`Failed to inspect container before starting:`, inspectErr);
+      }
+
+      await ContainerService.startContainer(containerId);
+
+      if (projectId) {
+        const config = await ProjectService.getNetworkConfig(projectId);
+        if (config) {
+          NetworkService.clearPolicyHash(projectId);
+          NetworkService.applyPolicy(projectId, config).catch(err => {
+            console.error(`Failed to re-apply network policy on start:`, err);
+          });
+        }
+      }
+
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -38,7 +71,27 @@ export class ContainerController {
 
   public static async stop(req: Request, res: Response): Promise<void> {
     try {
-      await ContainerService.stopContainer(req.params.id as string);
+      const containerId = req.params.id as string;
+      let projectId: string | undefined;
+      try {
+        const inspectData = await docker.getContainer(containerId).inspect();
+        projectId = inspectData.Config.Labels['akal.project.id'];
+      } catch (inspectErr) {
+        console.warn(`Failed to inspect container before stopping:`, inspectErr);
+      }
+
+      await ContainerService.stopContainer(containerId);
+
+      if (projectId) {
+        const config = await ProjectService.getNetworkConfig(projectId);
+        if (config) {
+          NetworkService.clearPolicyHash(projectId);
+          NetworkService.applyPolicy(projectId, config).catch(err => {
+            console.error(`Failed to re-apply network policy on stop:`, err);
+          });
+        }
+      }
+
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -47,7 +100,27 @@ export class ContainerController {
 
   public static async delete(req: Request, res: Response): Promise<void> {
     try {
-      await ContainerService.deleteContainer(req.params.id as string);
+      const containerId = req.params.id as string;
+      let projectId: string | undefined;
+      try {
+        const inspectData = await docker.getContainer(containerId).inspect();
+        projectId = inspectData.Config.Labels['akal.project.id'];
+      } catch (inspectErr) {
+        console.warn(`Failed to inspect container before deleting:`, inspectErr);
+      }
+
+      await ContainerService.deleteContainer(containerId);
+
+      if (projectId) {
+        const config = await ProjectService.getNetworkConfig(projectId);
+        if (config) {
+          NetworkService.clearPolicyHash(projectId);
+          NetworkService.applyPolicy(projectId, config).catch(err => {
+            console.error(`Failed to re-apply network policy on delete:`, err);
+          });
+        }
+      }
+
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

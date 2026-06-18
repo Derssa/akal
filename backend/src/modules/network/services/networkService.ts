@@ -18,14 +18,14 @@ export class NetworkService {
     // 1. Performance optimization: Policy Hash Diffing
     const serializedConfig = JSON.stringify(config);
     const hash = crypto.createHash('sha256').update(serializedConfig).digest('hex');
-    
+
     if (this.policyHashes[projectId] === hash) {
       console.log(`[NetworkService] No policy changes detected for project: ${projectId}. Skipping enforcement.`);
       return;
     }
 
     console.log(`[NetworkService] Policy change detected for project: ${projectId}. Recomputing...`);
-    
+
     // 2. Compute normalized rules (Policy Engine layer)
     const rules = this.computeSemanticRules(projectId, config);
 
@@ -81,16 +81,18 @@ export class NetworkService {
                 direction: 'outbound',
                 ownerNodeId: srcNodeId
               });
-              // Always permit icmp (ping) outbound if allowed to connect
-              rules.push({
-                sourceNodeId: srcNodeId,
-                targetNodeId: dstNodeId,
-                protocol: 'icmp',
-                port: 'ALL',
-                action,
-                direction: 'outbound',
-                ownerNodeId: srcNodeId
-              });
+              // Only permit icmp (ping) outbound if ALL traffic is allowed
+              if (port === 'ALL') {
+                rules.push({
+                  sourceNodeId: srcNodeId,
+                  targetNodeId: dstNodeId,
+                  protocol: 'icmp',
+                  port: 'ALL',
+                  action,
+                  direction: 'outbound',
+                  ownerNodeId: srcNodeId
+                });
+              }
             }
           } else if (sgRule.source.startsWith('subnet-')) {
             // Outbound to subnet
@@ -105,15 +107,17 @@ export class NetworkService {
                   direction: 'outbound',
                   ownerNodeId: srcNodeId
                 });
-                rules.push({
-                  sourceNodeId: srcNodeId,
-                  targetNodeId: dstNodeId,
-                  protocol: 'icmp',
-                  port: 'ALL',
-                  action,
-                  direction: 'outbound',
-                  ownerNodeId: srcNodeId
-                });
+                if (port === 'ALL') {
+                  rules.push({
+                    sourceNodeId: srcNodeId,
+                    targetNodeId: dstNodeId,
+                    protocol: 'icmp',
+                    port: 'ALL',
+                    action,
+                    direction: 'outbound',
+                    ownerNodeId: srcNodeId
+                  });
+                }
               }
             }
           } else {
@@ -127,15 +131,17 @@ export class NetworkService {
               direction: 'outbound',
               ownerNodeId: srcNodeId
             });
-            rules.push({
-              sourceNodeId: srcNodeId,
-              targetNodeId: sgRule.source,
-              protocol: 'icmp',
-              port: 'ALL',
-              action,
-              direction: 'outbound',
-              ownerNodeId: srcNodeId
-            });
+            if (port === 'ALL') {
+              rules.push({
+                sourceNodeId: srcNodeId,
+                targetNodeId: sgRule.source,
+                protocol: 'icmp',
+                port: 'ALL',
+                action,
+                direction: 'outbound',
+                ownerNodeId: srcNodeId
+              });
+            }
           }
         }
       }
@@ -159,15 +165,17 @@ export class NetworkService {
                 direction: 'inbound',
                 ownerNodeId: srcNodeId
               });
-              rules.push({
-                sourceNodeId: dstNodeId,
-                targetNodeId: srcNodeId,
-                protocol: 'icmp',
-                port: 'ALL',
-                action,
-                direction: 'inbound',
-                ownerNodeId: srcNodeId
-              });
+              if (port === 'ALL') {
+                rules.push({
+                  sourceNodeId: dstNodeId,
+                  targetNodeId: srcNodeId,
+                  protocol: 'icmp',
+                  port: 'ALL',
+                  action,
+                  direction: 'inbound',
+                  ownerNodeId: srcNodeId
+                });
+              }
             }
           } else if (sgRule.source.startsWith('subnet-')) {
             // Inbound from subnet
@@ -182,15 +190,17 @@ export class NetworkService {
                   direction: 'inbound',
                   ownerNodeId: srcNodeId
                 });
-                rules.push({
-                  sourceNodeId: dstNodeId,
-                  targetNodeId: srcNodeId,
-                  protocol: 'icmp',
-                  port: 'ALL',
-                  action,
-                  direction: 'inbound',
-                  ownerNodeId: srcNodeId
-                });
+                if (port === 'ALL') {
+                  rules.push({
+                    sourceNodeId: dstNodeId,
+                    targetNodeId: srcNodeId,
+                    protocol: 'icmp',
+                    port: 'ALL',
+                    action,
+                    direction: 'inbound',
+                    ownerNodeId: srcNodeId
+                  });
+                }
               }
             }
           } else {
@@ -204,15 +214,17 @@ export class NetworkService {
               direction: 'inbound',
               ownerNodeId: srcNodeId
             });
-            rules.push({
-              sourceNodeId: sgRule.source,
-              targetNodeId: srcNodeId,
-              protocol: 'icmp',
-              port: 'ALL',
-              action,
-              direction: 'inbound',
-              ownerNodeId: srcNodeId
-            });
+            if (port === 'ALL') {
+              rules.push({
+                sourceNodeId: sgRule.source,
+                targetNodeId: srcNodeId,
+                protocol: 'icmp',
+                port: 'ALL',
+                action,
+                direction: 'inbound',
+                ownerNodeId: srcNodeId
+              });
+            }
           }
         }
       }

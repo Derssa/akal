@@ -405,6 +405,13 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     return [
       {
         id: `rule-${Math.random().toString(36).substr(2, 9)}`,
+        type: 'inbound' as const,
+        action: 'DENY' as const,
+        port: 'ALL',
+        source: '0.0.0.0/0'
+      },
+      {
+        id: `rule-${Math.random().toString(36).substr(2, 9)}`,
         type: 'outbound' as const,
         action: 'ALLOW' as const,
         port: 'ALL',

@@ -67,18 +67,19 @@ export class DockerNetworkProvider implements NetworkProvider {
 
     // 2. Ensure networks for active subnets exist
     for (const subnet of config.subnets || []) {
+      const cidr = subnet.cidr || `10.0.${config.subnets.indexOf(subnet) + 1}.0/24`;
       const netName = `akal-subnet-${projectId}-${subnet.id}`;
       const exists = allNetworks.some(n => n.Name === netName);
       if (!exists) {
-        console.log(`[DockerNetworkProvider] Creating subnet network: ${netName} with CIDR ${subnet.cidr}`);
+        console.log(`[DockerNetworkProvider] Creating subnet network: ${netName} with CIDR ${cidr}`);
         try {
-          const gateway = subnet.cidr.replace(/\.0\/\d+$/, '.1');
+          const gateway = cidr.replace(/\.0\/\d+$/, '.1');
           await docker.createNetwork({
             Name: netName,
             Driver: 'bridge',
             IPAM: {
               Config: [{
-                Subnet: subnet.cidr,
+                Subnet: cidr,
                 Gateway: gateway
               }]
             }
@@ -106,10 +107,11 @@ export class DockerNetworkProvider implements NetworkProvider {
       if (subnetId) {
         const subnet = config.subnets.find((s: any) => s.id === subnetId);
         if (subnet) {
+          const cidr = subnet.cidr || `10.0.${config.subnets.indexOf(subnet) + 1}.0/24`;
           const subnetEndpoints = endpoints.filter(e => config.nodeSubnetMap[e.nodeId] === subnetId)
             .sort((a, b) => a.containerName.localeCompare(b.containerName));
           const idx = subnetEndpoints.findIndex(e => e.nodeId === ep.nodeId);
-          const prefixMatch = subnet.cidr.match(/^(\d+\.\d+\.\d+)\./);
+          const prefixMatch = cidr.match(/^(\d+\.\d+\.\d+)\./);
           const targetIp = prefixMatch ? `${prefixMatch[1]}.${2 + idx}` : '';
 
           const targetNetwork = `akal-subnet-${projectId}-${subnetId}`;

@@ -250,6 +250,25 @@ export default function SubnetNode({ id, data }: any) {
       >
         <Trash size={12} />
       </button>
+
+      {data.cidr && (
+        <div style={{
+          position: 'absolute',
+          bottom: '8px',
+          left: '12px',
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          border: '1px solid rgba(0, 0, 0, 0.1)',
+          color: '#374151',
+          fontSize: '11px',
+          fontWeight: 600,
+          padding: '2px 6px',
+          borderRadius: '4px',
+          pointerEvents: 'none',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+        }}>
+          {data.cidr}
+        </div>
+      )}
     </div>
   );
 }

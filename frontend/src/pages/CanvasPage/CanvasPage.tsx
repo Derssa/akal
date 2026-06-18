@@ -39,6 +39,7 @@ interface Subnet {
   id: string;
   name: string;
   type: 'public' | 'private';
+  cidr?: string;
   vpcId: string | null;
   position: { x: number; y: number };
   width: number;
@@ -529,6 +530,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             id: subnet.id,
             name: subnet.name,
             type: subnet.type,
+            cidr: subnet.cidr,
             width: subnet.width,
             height: subnet.height,
             columns: subnet.columns || 2,
@@ -1103,6 +1105,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           id: `subnet-${Math.random().toString(36).substr(2, 9)}`,
           name: `${isPublic ? 'Public' : 'Private'} Subnet-${networkConfig.subnets.length + 1}`,
           type: isPublic ? 'public' : 'private',
+          cidr: `10.0.${networkConfig.subnets.length + 1}.0/24`,
           vpcId: 'root-vpc',
           position: position,
           width: subnetWidth,

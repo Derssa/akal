@@ -1070,6 +1070,15 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   };
 
   const handleCreateNode = async (name: string) => {
+    const exists = containers.some(c => c.name.toLowerCase() === name.toLowerCase());
+    if (exists) {
+      showNotification({
+        type: 'error',
+        message: `A node named "${name}" already exists in this project.`
+      });
+      return;
+    }
+
     setShowCreateModal(false);
     const type = dropState?.type || 'ubuntu';
     const position = dropState?.position;

@@ -34,7 +34,7 @@ export class DockerNetworkProvider implements NetworkProvider {
     }
   }
 
-  public async applyPlan(projectId: string, endpoints: VirtualEndpoint[], intents: NetworkIntent[]): Promise<void> {
+  public async applyPlan(projectId: string, endpoints: VirtualEndpoint[], intents: NetworkIntent[], config: any): Promise<void> {
     console.log(`[DockerNetworkProvider] Applying network plan for project: ${projectId}`);
     
     const dockerContainers = await docker.listContainers({ all: true });

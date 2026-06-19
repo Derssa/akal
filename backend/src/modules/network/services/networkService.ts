@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { SemanticRule, NetworkPolicy } from '../models/networkPolicy';
+import { SemanticRule } from '../models/networkPolicy';
 import { EnforcementPlanner } from '../planner/enforcementPlanner';
 import { VirtualNetworkMapper } from '../mapper/virtualNetworkMapper';
 import { DockerNetworkProvider } from '../providers/dockerNetworkProvider';

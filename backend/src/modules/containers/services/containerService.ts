@@ -79,7 +79,7 @@ export class ContainerService {
           database: db,
           tables: tableNodes
         });
-      } catch (err) {
+      } catch {
         explorer.push({
           database: db,
           tables: [],
@@ -149,7 +149,7 @@ export class ContainerService {
           database: db,
           tables: tableNodes
         });
-      } catch (err) {
+      } catch {
         explorer.push({
           database: db,
           tables: [],

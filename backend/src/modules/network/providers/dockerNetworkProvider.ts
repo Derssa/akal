@@ -34,6 +34,45 @@ export class DockerNetworkProvider implements NetworkProvider {
     }
   }
 
+  private findNatRoute(subnet: any, endpoints: VirtualEndpoint[], config: any, dockerContainers: any[], projectId: string) {
+    if (!subnet || !subnet.routes) return null;
+    return subnet.routes.find((r: any) => {
+      if (r.destination !== '0.0.0.0/0') return false;
+      const targetLower = r.target.toLowerCase();
+      if (targetLower.startsWith('nat')) return true;
+      
+      // Check if target matches the IP address or name of a NAT node
+      const matchedNatEp = endpoints.find(e => {
+        const containerInfo = dockerContainers.find(c => c.Id === e.nodeId);
+        const isNat = containerInfo?.Labels?.['akal.node.type'] === 'nat';
+        if (!isNat) return false;
+        
+        const epIp = config.nodeIpMap?.[e.nodeId];
+        const cleanName = e.containerName.replace(`akal-lab-${projectId}-`, '');
+        return r.target === epIp || targetLower === cleanName.toLowerCase();
+      });
+      return !!matchedNatEp;
+    });
+  }
+
+  private findNatEndpoint(natRoute: any, endpoints: VirtualEndpoint[], config: any, projectId: string): VirtualEndpoint | undefined {
+    if (!natRoute) return undefined;
+    let natEp = endpoints.find(e => {
+      const cleanName = e.containerName.replace(`akal-lab-${projectId}-`, '');
+      return e.containerName === natRoute.target || 
+             cleanName.toLowerCase() === natRoute.target.toLowerCase() ||
+             e.containerName === `akal-lab-${projectId}-${natRoute.target}`;
+    });
+    
+    if (!natEp && config.nodeIpMap) {
+      const matchedNodeId = Object.keys(config.nodeIpMap).find(nodeId => config.nodeIpMap[nodeId] === natRoute.target);
+      if (matchedNodeId) {
+        natEp = endpoints.find(e => e.nodeId === matchedNodeId);
+      }
+    }
+    return natEp;
+  }
+
   public async applyPlan(projectId: string, endpoints: VirtualEndpoint[], intents: NetworkIntent[], config: any): Promise<void> {
     console.log(`[DockerNetworkProvider] Applying network plan for project: ${projectId}`);
 
@@ -217,9 +256,9 @@ export class DockerNetworkProvider implements NetworkProvider {
 
     // Connect NAT gateways to their private subnets
     for (const subnet of config.subnets || []) {
-      const natRoute = subnet.routes?.find((r: any) => r.destination === '0.0.0.0/0' && r.target.toLowerCase().startsWith('nat'));
+      const natRoute = this.findNatRoute(subnet, endpoints, config, dockerContainers, projectId);
       if (natRoute) {
-        const natEp = endpoints.find(e => e.containerName === natRoute.target || e.containerName === `akal-lab-${projectId}-${natRoute.target}`);
+        const natEp = this.findNatEndpoint(natRoute, endpoints, config, projectId);
         if (natEp) {
           const natContainerInfo = dockerContainers.find(c => 
             c.Id === natEp.nodeId ||
@@ -368,7 +407,7 @@ export class DockerNetworkProvider implements NetworkProvider {
       const hasLocalRoute = subnet?.routes?.some((r: any) => r.destination === (config.vpcConfig?.cidr || '10.0.0.0/16') && r.target === 'local');
 
       // Check if this subnet has a NAT Gateway route
-      const natRoute = subnet?.routes?.find((r: any) => r.destination === '0.0.0.0/0' && r.target.toLowerCase().startsWith('nat'));
+      const natRoute = this.findNatRoute(subnet, endpoints, config, dockerContainers, projectId);
       const isInternetAllowed = (isIgwEnabled && isPublicSubnet && hasIgwRoute) || !!natRoute;
       const vpcCidr = config.vpcConfig?.cidr || '10.0.0.0/16';
 

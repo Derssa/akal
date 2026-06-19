@@ -5,7 +5,7 @@ export interface ContainerData {
   name: string;
   state: string;
   status: string;
-  type?: 'ubuntu' | 'postgres' | 'mysql';
+  type?: 'ubuntu' | 'postgres' | 'mysql' | 'nat';
   port?: string;
   ip?: string;
 }

@@ -1,5 +1,5 @@
 import { Handle, Position } from '@xyflow/react';
-import { Play, Square, Trash2, Terminal as TermIcon, Shield, Globe } from 'lucide-react';
+import { Play, Square, Trash2, Shield, Globe } from 'lucide-react';
 import styles from '../ServiceNode.module.css';
 
 interface NatNodeProps {
@@ -73,13 +73,13 @@ export default function NatNode({ data }: NatNodeProps) {
         {isRunning ? (
           <>
             <button
-              onClick={() => data.onTerminalOpen(data.id, data.name)}
+              onClick={() => data.onInspect(data.id, data.name)}
               className={`${styles.btn} ${styles.btnPrimary}`}
               style={{ backgroundColor: '#8B5CF6' }}
-              title="Open Terminal"
+              title="View NAT Gateway details & guide"
             >
-              <TermIcon size={14} style={{ marginRight: 4 }} />
-              Terminal
+              <Globe size={14} style={{ marginRight: 4 }} />
+              Info & Guide
             </button>
             <button
               onClick={() => data.onStop(data.id)}

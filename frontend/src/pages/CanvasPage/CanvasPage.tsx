@@ -5,6 +5,7 @@ import '@xyflow/react/dist/style.css';
 
 import UbuntuNode from '../../features/nodes/UbuntuNode/UbuntuNode';
 import NatNode from '../../features/nodes/NatNode/NatNode';
+import NatGatewayModal from '../../features/nodes/NatNode/NatGatewayModal';
 import PostgresNode from '../../features/nodes/PostgresNode/PostgresNode';
 import PostgresModal from '../../features/nodes/PostgresNode/PostgresModal';
 import MysqlNode from '../../features/nodes/MysqlNode/MysqlNode';
@@ -98,6 +99,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [inspectingPostgres, setInspectingPostgres] = useState<{ id: string; name: string } | null>(null);
   const [inspectingMysql, setInspectingMysql] = useState<{ id: string; name: string } | null>(null);
+  const [inspectingNat, setInspectingNat] = useState<{ id: string; name: string } | null>(null);
 
   // Phase 3 Modal states
   const [inspectingSubnet, setInspectingSubnet] = useState<{ id: string; name: string } | null>(null);
@@ -679,8 +681,10 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             onInspect: (id: string, name: string) => {
               if (nodeType === 'mysql') {
                 setInspectingMysql({ id, name });
-              } else {
+              } else if (nodeType === 'postgres') {
                 setInspectingPostgres({ id, name });
+              } else if (nodeType === 'nat') {
+                setInspectingNat({ id, name });
               }
             },
             onSecurityGroupOpen: (id: string, name: string) => {
@@ -1390,6 +1394,15 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           nodeName={inspectingMysql.name}
           projectId={projectId}
           onClose={() => setInspectingMysql(null)}
+        />
+      )}
+
+      {inspectingNat && (
+        <NatGatewayModal
+          nodeName={inspectingNat.name}
+          ipAddress={networkConfig.nodeIpMap?.[inspectingNat.id]}
+          state={containers.find(c => c.id === inspectingNat.id)?.state || 'stopped'}
+          onClose={() => setInspectingNat(null)}
         />
       )}
 

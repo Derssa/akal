@@ -124,7 +124,9 @@ export class DockerNetworkProvider implements NetworkProvider {
               console.log(`[DockerNetworkProvider] Disconnecting container ${ep.containerName} from ${netName}...`);
               try {
                 await docker.getNetwork(netName).disconnect({ Container: containerInfo.Id, Force: true });
-              } catch (err) {}
+              } catch {
+                // Ignore disconnect error if network is not connected
+              }
             }
           }
 
@@ -136,7 +138,9 @@ export class DockerNetworkProvider implements NetworkProvider {
               console.log(`[DockerNetworkProvider] Reconnecting container ${ep.containerName} to ${targetNetwork} due to IP mismatch...`);
               try {
                 await docker.getNetwork(targetNetwork).disconnect({ Container: containerInfo.Id, Force: true });
-              } catch (err) {}
+              } catch {
+                // Ignore disconnect error if network is not connected
+              }
             }
             console.log(`[DockerNetworkProvider] Connecting container ${ep.containerName} to ${targetNetwork} with static IP ${targetIp}...`);
             const containerNodeName = containerInfo.Names[0].replace(/^\//, '').replace(`akal-lab-${projectId}-`, '');
@@ -162,7 +166,9 @@ export class DockerNetworkProvider implements NetworkProvider {
             console.log(`[DockerNetworkProvider] Disconnecting container ${ep.containerName} from subnet network ${netName}...`);
             try {
               await docker.getNetwork(netName).disconnect({ Container: containerInfo.Id, Force: true });
-            } catch (err) {}
+            } catch {
+              // Ignore disconnect error if network is not connected
+            }
           }
         }
 
@@ -170,7 +176,9 @@ export class DockerNetworkProvider implements NetworkProvider {
           console.log(`[DockerNetworkProvider] Reconnecting container ${ep.containerName} to default network ${targetNetwork}...`);
           try {
             await docker.getNetwork(targetNetwork).connect({ Container: containerInfo.Id });
-          } catch (err) {}
+          } catch {
+            // Ignore connect error if network connection fails
+          }
         }
       }
     }
@@ -438,7 +446,9 @@ export class DockerNetworkProvider implements NetworkProvider {
         const inspect = await net.inspect();
         const subnet = inspect.IPAM?.Config?.[0]?.Subnet;
         if (subnet) return subnet;
-      } catch (e) {}
+      } catch {
+        // Ignore network inspect error and fallback to default CIDR
+      }
       return cidr;
     }
 

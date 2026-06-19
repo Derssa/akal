@@ -8,7 +8,9 @@
     "build": "tsc",
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
     "lint": "eslint .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +19,7 @@
   "dependencies": {
     "cors": "^2.8.6",
     "dockerode": "^5.0.0",
+    "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
   },
@@ -25,10 +28,15 @@
     "@types/cors": "^2.8.19",
     "@types/dockerode": "^4.0.1",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.9.3",
+    "@types/supertest": "^7.2.0",
     "eslint": "^10.5.0",
     "globals": "^17.6.0",
+    "jest": "^30.4.2",
     "nodemon": "^3.1.14",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",

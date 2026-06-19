@@ -189,7 +189,9 @@ export class ContainerManager {
       const existingConflict = docker.getContainer(safeName);
       await existingConflict.remove({ force: true });
       console.log(`[ContainerManager] Force-removed conflicting container with name: ${safeName}`);
-    } catch (err) {}
+    } catch {
+      // Ignore if container conflict does not exist
+    }
 
     const createOpts: any = {
       Image: image,

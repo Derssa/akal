@@ -168,7 +168,9 @@ export class DockerInitializer {
         try {
           const oldContainer = docker.getContainer('akal-lab-temp-mysql-build');
           await oldContainer.remove({ force: true });
-        } catch (e) {}
+        } catch {
+          // Ignore if old container doesn't exist
+        }
 
         console.log(`[DockerInitializer] Creating temporary build container for MySQL...`);
         const tempContainer = await docker.createContainer({
@@ -186,8 +188,7 @@ export class DockerInitializer {
         });
         const stream = await exec.start({});
         await new Promise<void>((resolve) => {
-          let output = '';
-          stream.on('data', (chunk) => { output += chunk.toString(); });
+          stream.on('data', () => {});
           stream.on('end', () => resolve());
         });
 

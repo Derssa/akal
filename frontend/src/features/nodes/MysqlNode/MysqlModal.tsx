@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Database, Table, Columns, Play, Copy, Check, Search, BookOpen, Terminal, RefreshCw, AlertCircle, Eye, Loader2 } from 'lucide-react';
 import { API_BASE } from '../../../shared/types';
 import mysqlCheatSheet from './data/mysqlCheatSheet.json';
@@ -48,7 +48,9 @@ export default function MysqlModal({ containerId, nodeName, projectId, onClose }
   const [expandedDBs, setExpandedDBs] = useState<Record<string, boolean>>({});
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
 
-  const fetchExplorerData = async () => {
+  const fetchExplorerDataRef = useRef<() => Promise<void>>(undefined);
+
+  const fetchExplorerData = useCallback(async () => {
     try {
       setLoadingExplorer(true);
       setExplorerError(null);
@@ -68,22 +70,27 @@ export default function MysqlModal({ containerId, nodeName, projectId, onClose }
           setExplorerError('starting_up');
           // Auto retry in 2.5 seconds
           setTimeout(() => {
-            fetchExplorerData();
+            fetchExplorerDataRef.current?.();
           }, 2500);
         } else {
           setExplorerError(errData.error || 'Failed to inspect schema');
         }
       }
-    } catch (err: any) {
-      setExplorerError(err.message || 'Failed to connect to container');
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to connect to container';
+      setExplorerError(errMsg);
     } finally {
       setLoadingExplorer(false);
     }
-  };
+  }, [projectId, containerId]);
+
+  useEffect(() => {
+    fetchExplorerDataRef.current = fetchExplorerData;
+  }, [fetchExplorerData]);
 
   useEffect(() => {
     fetchExplorerData();
-  }, [containerId]);
+  }, [fetchExplorerData]);
 
   const handleExecuteQuery = async () => {
     let targetDb = selectedDb;
@@ -123,8 +130,9 @@ export default function MysqlModal({ containerId, nodeName, projectId, onClose }
       } else {
         setQueryOutput(localConsoleOutput + `ERROR: ${data.error}`);
       }
-    } catch (err: any) {
-      setQueryOutput(localConsoleOutput + `Execution failed: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setQueryOutput(localConsoleOutput + `Execution failed: ${errMsg}`);
     } finally {
       setExecuting(false);
     }
@@ -150,8 +158,9 @@ export default function MysqlModal({ containerId, nodeName, projectId, onClose }
       } else {
         setQueryOutput(`ERROR: ${data.error}`);
       }
-    } catch (err: any) {
-      setQueryOutput(`Execution failed: ${err.message}`);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setQueryOutput(`Execution failed: ${errMsg}`);
     } finally {
       setExecuting(false);
     }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import { ReactFlow, Background, Controls, BackgroundVariant, useNodesState } from '@xyflow/react';
-import type { Node, Edge } from '@xyflow/react';
+import type { Node, Edge, ReactFlowInstance, Connection } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import UbuntuNode from '../../features/nodes/UbuntuNode/UbuntuNode';
@@ -14,7 +14,8 @@ import LoadBalancerNode from '../../features/nodes/LoadBalancerNode/LoadBalancer
 import LoadBalancerModal from '../../features/nodes/LoadBalancerNode/LoadBalancerModal';
 import NodeLibrary from './components/NodeLibrary';
 import { useContainers } from '../../shared/hooks/useContainers';
-import { useToast, ToastNotification } from '../../shared/components/Toast';
+import { useToast } from '../../shared/hooks/useToast';
+import { ToastNotification } from '../../shared/components/Toast';
 import InputModal from '../../shared/components/InputModal';
 import ConfirmModal from '../../shared/components/ConfirmModal';
 import CanvasTopbar from './components/CanvasTopbar';
@@ -31,6 +32,18 @@ import type { VPCConfig } from '../../features/nodes/VpcNode/VpcModal';
 import ButtonEdge from './components/ButtonEdge';
 import { validateArchitecture } from '../../shared/utils/architectureValidator';
 import { API_BASE } from '../../shared/types';
+
+// Recursively calculate absolute coordinates of a node
+const getAbsoluteCoordinates = (nodeId: string, currentNodes: Node[]): { x: number; y: number } => {
+  const node = currentNodes.find(n => n.id === nodeId);
+  if (!node) return { x: 0, y: 0 };
+  if (!node.parentId) return node.position;
+  const parentPos = getAbsoluteCoordinates(node.parentId, currentNodes);
+  return {
+    x: parentPos.x + node.position.x,
+    y: parentPos.y + node.position.y
+  };
+};
 
 interface CanvasPageProps {
   projectId: string;
@@ -65,9 +78,7 @@ interface NetworkConfig {
 }
 
 function autoGrowContainers(
-  config: NetworkConfig,
-  _containers: any[],
-  _positions: Record<string, { x: number; y: number }>
+  config: NetworkConfig
 ): NetworkConfig {
   const updatedSubnets = config.subnets.map(subnet => {
     const cols = subnet.columns || 2;
@@ -112,7 +123,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const [inspectingSecurityGroup, setInspectingSecurityGroup] = useState<{ id: string; name: string; type: string } | null>(null);
 
   // Drag and drop tracking
-  const [reactFlowInstance, setReactFlowInstance] = useState<any>(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [dropState, setDropState] = useState<{ position: { x: number; y: number }; type: string } | null>(null);
   const dropPositionsRef = useRef<Record<string, { x: number; y: number }>>({});
   const dropSubnetsRef = useRef<Record<string, string>>({});
@@ -164,7 +175,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
 
   // Save/load network config helper
   const saveNetworkConfig = useCallback((newConfig: NetworkConfig) => {
-    const grownConfig = autoGrowContainers(newConfig, containers, positionsRef.current);
+    const grownConfig = autoGrowContainers(newConfig);
     setNetworkConfig(grownConfig);
     localStorage.setItem(`akal-lab-network-config-${projectId}`, JSON.stringify(grownConfig));
 
@@ -179,7 +190,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       console.error('Failed to sync network configuration to backend:', err);
       throw err;
     });
-  }, [projectId, containers]);
+  }, [projectId]);
 
   const triggerArchitectureAudit = useCallback((configToValidate: NetworkConfig) => {
     const result = validateArchitecture(configToValidate, containers);
@@ -314,6 +325,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     const edgesList: Edge[] = [];
 
     containers.forEach(destNode => {
+      if (destNode.type === 'nat') return;
       const destRules = networkConfig.nodeSecurityGroups[destNode.id] || [];
       const destSubnetId = networkConfig.nodeSubnetMap[destNode.id];
       if (!destSubnetId) return;
@@ -326,6 +338,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       inboundAllowRules.forEach(rule => {
         containers.forEach(srcNode => {
           if (srcNode.id === destNode.id) return;
+          if (srcNode.type === 'nat') return;
 
           const srcSubnetId = networkConfig.nodeSubnetMap[srcNode.id];
           if (!srcSubnetId) return;
@@ -369,8 +382,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   }, [containers, networkConfig, handleDeleteEdge]);
 
   // Handle manual connection line draws (automatically updates security group)
-  const onConnect = useCallback((connection: any) => {
+  const onConnect = useCallback((connection: Connection) => {
     const { source, target } = connection;
+    if (!source || !target) return;
     const targetNode = containers.find(n => n.id === target);
     const sourceNode = containers.find(n => n.id === source);
     if (!targetNode) return;
@@ -459,7 +473,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   };
 
   // Helper to generate default security group rules for network nodes (deny all inbound by default)
-  const initDefaultRules = (_nodeId: string, _nodeType: string, _subnetId: string) => {
+  const initDefaultRules = () => {
     return [
       {
         id: `rule-${Math.random().toString(36).substr(2, 9)}`,
@@ -552,7 +566,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
 
         // Auto-configure default security rules on drop
         if (!updatedSecurityGroups[c.id] || updatedSecurityGroups[c.id].length === 0) {
-          updatedSecurityGroups[c.id] = initDefaultRules(c.id, c.type || 'ubuntu', subnetId);
+          updatedSecurityGroups[c.id] = initDefaultRules();
         }
 
         const tempConfig = { ...networkConfig, nodeSubnetMap: updatedNodeSubnetMap, nodeIpMap: updatedNodeIpMap };
@@ -724,19 +738,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
 
     // Save current positions (including auto-placed new nodes) to localStorage
     localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(positionsRef.current));
-  }, [containers, startContainer, stopContainer, onTerminalOpen, setNodes, networkConfig, saveNetworkConfig, handleDeleteSubnet, handleSubnetResize]);
+  }, [projectId, containers, startContainer, stopContainer, onTerminalOpen, setNodes, networkConfig, saveNetworkConfig, handleDeleteSubnet, handleSubnetResize]);
 
-  // Recursively calculate absolute coordinates of a node
-  const getAbsoluteCoordinates = (nodeId: string, currentNodes: Node[]): { x: number; y: number } => {
-    const node = currentNodes.find(n => n.id === nodeId);
-    if (!node) return { x: 0, y: 0 };
-    if (!node.parentId) return node.position;
-    const parentPos = getAbsoluteCoordinates(node.parentId, currentNodes);
-    return {
-      x: parentPos.x + node.position.x,
-      y: parentPos.y + node.position.y
-    };
-  };
+
 
   // Track start position on drag start to allow rollback/reversion if drop is invalid
   const onNodeDragStart = useCallback((_event: any, node: Node) => {
@@ -774,8 +778,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     if (draggedNode.type !== 'subnet') {
       // Service node dragged
       for (const subnet of networkConfig.subnets) {
-        let subnetAbsX = subnet.position.x;
-        let subnetAbsY = subnet.position.y;
+        const subnetAbsX = subnet.position.x;
+        const subnetAbsY = subnet.position.y;
         if (
           centerX >= subnetAbsX &&
           centerX <= subnetAbsX + subnet.width &&
@@ -791,8 +795,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       // Subnet dragged: Check if dropped inside another subnet (invalid)
       for (const subnet of networkConfig.subnets) {
         if (subnet.id === draggedNode.id) continue;
-        let subnetAbsX = subnet.position.x;
-        let subnetAbsY = subnet.position.y;
+        const subnetAbsX = subnet.position.x;
+        const subnetAbsY = subnet.position.y;
         if (
           centerX >= subnetAbsX &&
           centerX <= subnetAbsX + subnet.width &&
@@ -807,7 +811,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     }
 
     // Update real-time position in coordinates map for auto-growing calculations
-    let tempNodeSubnetMap = { ...networkConfig.nodeSubnetMap };
+    const tempNodeSubnetMap = { ...networkConfig.nodeSubnetMap };
 
     // If we are hovering a valid container, assume it's parented temporarily for sizing check
     if (hoveredId && isValid) {
@@ -817,31 +821,16 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       delete tempNodeSubnetMap[draggedNode.id];
     }
 
-    // Calculate temp positions relative to the hovered container
-    let tempPos = { x: absX, y: absY };
-    if (hoveredId && isValid) {
-      if (hoveredId.startsWith('subnet-')) {
-        const subnet = networkConfig.subnets.find(s => s.id === hoveredId);
-        if (subnet) {
-          let subnetAbsX = subnet.position.x;
-          let subnetAbsY = subnet.position.y;
-          tempPos = { x: absX - subnetAbsX, y: absY - subnetAbsY };
-        }
-      }
-    }
 
-    const key = (draggedNode.type === 'subnet' ? draggedNode.id : draggedNode.data?.name) as string;
-    const currentPositions = {
-      ...positionsRef.current,
-      [key]: tempPos
-    };
+
+
 
     const tempConfig = {
       ...networkConfig,
       nodeSubnetMap: tempNodeSubnetMap
     };
 
-    const grownConfig = autoGrowContainers(tempConfig, containers, currentPositions);
+    const grownConfig = autoGrowContainers(tempConfig);
 
     setNodes(prev => prev.map(n => {
       // Apply grew sizes to subnets
@@ -913,8 +902,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       let insideAnotherSubnet = false;
       for (const subnet of networkConfig.subnets) {
         if (subnet.id === draggedNode.id) continue;
-        let subnetAbsX = subnet.position.x;
-        let subnetAbsY = subnet.position.y;
+        const subnetAbsX = subnet.position.x;
+        const subnetAbsY = subnet.position.y;
         if (
           subnetCenterX >= subnetAbsX &&
           subnetCenterX <= subnetAbsX + subnet.width &&
@@ -954,8 +943,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       let targetSubnetAbsPos = { x: 0, y: 0 };
 
       for (const subnet of networkConfig.subnets) {
-        let subnetAbsX = subnet.position.x;
-        let subnetAbsY = subnet.position.y;
+        const subnetAbsX = subnet.position.x;
+        const subnetAbsY = subnet.position.y;
 
         if (
           nodeCenterX >= subnetAbsX &&
@@ -1011,7 +1000,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
 
         // Automatically setup default firewall connections when dragged into subnet
         if (!updatedSecurityGroups[draggedNode.id] || updatedSecurityGroups[draggedNode.id].length === 0) {
-          updatedSecurityGroups[draggedNode.id] = initDefaultRules(draggedNode.id, draggedNode.type || 'ubuntu', targetSubnetId);
+          updatedSecurityGroups[draggedNode.id] = initDefaultRules();
         }
 
         const tempConfig = {
@@ -1050,7 +1039,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       saveNetworkConfig(newConfig);
       triggerArchitectureAudit(newConfig);
     }
-  }, [reactFlowInstance, networkConfig, projectId, saveNetworkConfig, setNodes, triggerArchitectureAudit, showNotification, containers]);
+  }, [reactFlowInstance, networkConfig, projectId, saveNetworkConfig, setNodes, triggerArchitectureAudit, showNotification]);
 
   const onNodesDelete = useCallback((deleted: Node[]) => {
     let updatedSubnets = [...networkConfig.subnets];
@@ -1190,8 +1179,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         // Check if dropped inside another subnet
         let insideAnotherSubnet = false;
         for (const subnet of networkConfig.subnets) {
-          let subnetAbsX = subnet.position.x;
-          let subnetAbsY = subnet.position.y;
+          const subnetAbsX = subnet.position.x;
+          const subnetAbsY = subnet.position.y;
           if (
             subnetCenterX >= subnetAbsX &&
             subnetCenterX <= subnetAbsX + subnet.width &&
@@ -1239,8 +1228,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         let targetSubnetAbsPos = { x: 0, y: 0 };
 
         for (const subnet of networkConfig.subnets) {
-          let subnetAbsX = subnet.position.x;
-          let subnetAbsY = subnet.position.y;
+          const subnetAbsX = subnet.position.x;
+          const subnetAbsY = subnet.position.y;
 
           if (
             nodeCenterX >= subnetAbsX &&

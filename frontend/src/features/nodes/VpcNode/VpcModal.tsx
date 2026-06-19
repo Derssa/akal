@@ -13,7 +13,13 @@ export interface VPCConfig {
 
 interface VpcModalProps {
   vpcConfig: VPCConfig;
-  subnets: Array<{ id: string; name: string; type: 'public' | 'private'; vpcId: string | null }>;
+  subnets: Array<{
+    id: string;
+    name: string;
+    type: 'public' | 'private';
+    vpcId: string | null;
+    routes?: Array<{ target: string; destination: string }>;
+  }>;
   nodes: ContainerData[];
   nodeSecurityGroups: Record<string, SecurityGroupRule[]>;
   nodeSubnetMap: Record<string, string>;
@@ -100,7 +106,7 @@ export default function VpcModal({
     const destSubnet = subnets.find(s => s.id === destSubnetId);
 
     // 1. Check routing tables for 'local' routes inside VPC
-    const sourceHasLocalRoute = (sourceSubnet as any)?.routes?.some((r: any) => r.target === 'local');
+    const sourceHasLocalRoute = sourceSubnet?.routes?.some(r => r.target === 'local');
     if (sourceSubnet && !sourceHasLocalRoute) {
       setSimulationResult({
         success: false,
@@ -110,7 +116,7 @@ export default function VpcModal({
       return;
     }
 
-    const destHasLocalRoute = (destSubnet as any)?.routes?.some((r: any) => r.target === 'local');
+    const destHasLocalRoute = destSubnet?.routes?.some(r => r.target === 'local');
     if (destSubnet && !destHasLocalRoute) {
       setSimulationResult({
         success: false,

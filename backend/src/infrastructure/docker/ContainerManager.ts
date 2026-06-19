@@ -185,7 +185,10 @@ export class ContainerManager {
         let ip = '';
         const networks = c.NetworkSettings?.Networks;
         if (networks) {
-          const key = Object.keys(networks).find(k => k.startsWith('akal-'));
+          let key = Object.keys(networks).find(k => k.startsWith('akal-subnet-'));
+          if (!key) {
+            key = Object.keys(networks).find(k => k.startsWith('akal-'));
+          }
           if (key && networks[key]) {
             ip = networks[key].IPAddress;
           }
@@ -221,7 +224,7 @@ export class ContainerManager {
     } else {
       await this.ensureUbuntuImage();
     }
-    
+
     console.log(`Creating ${type} container...`);
     const safeName = `${this.LAB_PREFIX}${projectId}-${nodeName.replace(/[^a-zA-Z0-9-_]/g, '')}`;
 
@@ -326,7 +329,7 @@ export class ContainerManager {
 
   public static async executePsqlCommand(containerId: string, database: string, sqlQuery: string, extraArgs: string[] = []): Promise<string> {
     const container = docker.getContainer(containerId);
-    
+
     const exec = await container.exec({
       Cmd: ['psql', '-U', 'postgres', '-d', database, ...extraArgs, '-c', sqlQuery],
       AttachStdout: true,
@@ -334,10 +337,10 @@ export class ContainerManager {
     });
 
     const stream = await exec.start({});
-    
+
     return new Promise<string>((resolve, reject) => {
       let output = '';
-      
+
       container.modem.demuxStream(stream, {
         write: (chunk: Buffer) => {
           output += chunk.toString();
@@ -364,7 +367,7 @@ export class ContainerManager {
 
   public static async executeMysqlCommand(containerId: string, database: string, sqlQuery: string, extraArgs: string[] = []): Promise<string> {
     const container = docker.getContainer(containerId);
-    
+
     const exec = await container.exec({
       Cmd: ['mysql', '-u', 'root', '-pmysql', '-D', database, ...extraArgs, '-e', sqlQuery],
       AttachStdout: true,
@@ -372,10 +375,10 @@ export class ContainerManager {
     });
 
     const stream = await exec.start({});
-    
+
     return new Promise<string>((resolve, reject) => {
       let output = '';
-      
+
       container.modem.demuxStream(stream, {
         write: (chunk: Buffer) => {
           output += chunk.toString();
@@ -389,9 +392,9 @@ export class ContainerManager {
       stream.on('end', () => {
         const warningText = 'mysql: [Warning] Using a password on the command line interface can be insecure.';
         let cleanOutput = output.replace(warningText, '').trim();
-        
+
         if (
-          cleanOutput.includes("Can't connect to local MySQL server through socket") || 
+          cleanOutput.includes("Can't connect to local MySQL server through socket") ||
           cleanOutput.includes("ERROR 2002 (HY000)") ||
           cleanOutput.includes("ERROR 1045 (28000)")
         ) {

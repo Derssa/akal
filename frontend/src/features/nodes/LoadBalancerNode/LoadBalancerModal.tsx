@@ -19,7 +19,13 @@ interface LoadBalancerModalProps {
     loadBalancerTargets?: string[];
     loadBalancerTargetPort?: number;
   };
-  allNodes: any[];
+  allNodes: Array<{
+    id: string;
+    type?: string;
+    name?: string;
+    ip?: string;
+    state?: string;
+  }>;
   onClose: () => void;
   onSaveConfig: (algorithm: 'round_robin' | 'least_conn', targets: string[], targetPort: number) => Promise<void>;
 }
@@ -48,9 +54,9 @@ export default function LoadBalancerModal({
     .filter(n => n.id !== containerId && n.type === 'ubuntu')
     .map(n => ({
       id: n.id,
-      name: n.name,
+      name: n.name || '',
       ip: n.ip,
-      state: n.state
+      state: n.state || 'stopped'
     }));
 
   const handleToggleTarget = (nodeId: string) => {

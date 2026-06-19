@@ -3,7 +3,22 @@ import { Play, Square, Trash2, GitFork, Settings, Shield } from 'lucide-react';
 import styles from '../ServiceNode.module.css';
 
 interface LoadBalancerNodeProps {
-  data: any;
+  data: {
+    id: string;
+    name: string;
+    state?: string;
+    ip?: string;
+    port?: string | number;
+    config?: {
+      loadBalancerAlgorithm?: 'round_robin' | 'least_conn';
+      loadBalancerTargets?: string[];
+    };
+    onSecurityGroupOpen?: (id: string, name: string) => void;
+    onInspect: (id: string, name: string) => void;
+    onStop: (id: string) => void;
+    onStart: (id: string) => void;
+    onDelete: (id: string) => void;
+  };
 }
 
 export default function LoadBalancerNode({ data }: LoadBalancerNodeProps) {

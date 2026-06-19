@@ -3,7 +3,19 @@ import { Play, Square, Trash2, Terminal as TermIcon, HardDrive, Shield } from 'l
 import styles from '../ServiceNode.module.css';
 
 interface UbuntuNodeProps {
-  data: any; // Use any to support onSecurityGroupOpen prop dynamically
+  data: {
+    id: string;
+    name: string;
+    state?: string;
+    ip?: string;
+    subnetType?: 'public' | 'private';
+    port?: string | number;
+    onSecurityGroupOpen?: (id: string, name: string) => void;
+    onTerminalOpen: (id: string, name: string) => void;
+    onStop: (id: string) => void;
+    onStart: (id: string) => void;
+    onDelete: (id: string) => void;
+  };
 }
 
 export default function UbuntuNode({ data }: UbuntuNodeProps) {

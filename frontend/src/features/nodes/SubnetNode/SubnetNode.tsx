@@ -1,6 +1,21 @@
 import { Eye, EyeOff, Route, Trash } from 'lucide-react';
 
-export default function SubnetNode({ id, data }: any) {
+interface SubnetNodeProps {
+  id: string;
+  data: {
+    type?: 'public' | 'private';
+    hoverStatus?: 'valid' | 'invalid' | null;
+    columns?: number;
+    rows?: number;
+    name?: string;
+    cidr?: string;
+    onResize?: (id: string, dimension: 'columns' | 'rows', size: number) => void;
+    onManageRoutes?: (id: string, name: string) => void;
+    onDelete?: (id: string) => void;
+  };
+}
+
+export default function SubnetNode({ id, data }: SubnetNodeProps) {
   const isPublic = data.type === 'public';
   const isHovered = data.hoverStatus === 'valid' || data.hoverStatus === 'invalid';
   
@@ -199,7 +214,7 @@ export default function SubnetNode({ id, data }: any) {
       <button
         onClick={(e) => {
           e.stopPropagation();
-          data.onManageRoutes?.(data.id, data.name || (isPublic ? 'Public Subnet' : 'Private Subnet'));
+          data.onManageRoutes?.(id, data.name || (isPublic ? 'Public Subnet' : 'Private Subnet'));
         }}
         style={{
           position: 'absolute',
@@ -228,7 +243,7 @@ export default function SubnetNode({ id, data }: any) {
       <button
         onClick={(e) => {
           e.stopPropagation();
-          data.onDelete?.(data.id);
+          data.onDelete?.(id);
         }}
         style={{
           position: 'absolute',

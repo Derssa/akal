@@ -14,7 +14,6 @@ interface CanvasTopbarProps {
 export default function CanvasTopbar({
   projectName,
   loading,
-  creating: _creating,
   onBack,
   onRefresh,
   onSave,

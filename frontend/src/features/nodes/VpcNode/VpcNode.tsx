@@ -1,6 +1,16 @@
 import { Shield, Settings, Trash } from 'lucide-react';
 
-export default function VpcNode({ data }: any) {
+interface VpcNodeProps {
+  data: {
+    id: string;
+    name?: string;
+    hoverStatus?: 'valid' | 'invalid' | null;
+    onConfigure?: (id: string, name: string) => void;
+    onDelete?: (id: string) => void;
+  };
+}
+
+export default function VpcNode({ data }: VpcNodeProps) {
   const isHovered = data.hoverStatus === 'valid' || data.hoverStatus === 'invalid';
   const borderColor = isHovered 
     ? (data.hoverStatus === 'valid' ? '#10B981' : '#EF4444') 

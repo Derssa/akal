@@ -2,7 +2,16 @@ import { Play, Square, Trash2, Globe } from 'lucide-react';
 import styles from '../ServiceNode.module.css';
 
 interface NatNodeProps {
-  data: any;
+  data: {
+    id: string;
+    name: string;
+    state?: string;
+    ip?: string;
+    onInspect: (id: string, name: string) => void;
+    onStop: (id: string) => void;
+    onStart: (id: string) => void;
+    onDelete: (id: string) => void;
+  };
 }
 
 export default function NatNode({ data }: NatNodeProps) {

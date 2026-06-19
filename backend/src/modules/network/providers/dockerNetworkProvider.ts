@@ -34,6 +34,45 @@ export class DockerNetworkProvider implements NetworkProvider {
     }
   }
 
+  private findNatRoute(subnet: any, endpoints: VirtualEndpoint[], config: any, dockerContainers: any[], projectId: string) {
+    if (!subnet || !subnet.routes) return null;
+    return subnet.routes.find((r: any) => {
+      if (r.destination !== '0.0.0.0/0') return false;
+      const targetLower = r.target.toLowerCase();
+      if (targetLower.startsWith('nat')) return true;
+      
+      // Check if target matches the IP address or name of a NAT node
+      const matchedNatEp = endpoints.find(e => {
+        const containerInfo = dockerContainers.find(c => c.Id === e.nodeId);
+        const isNat = containerInfo?.Labels?.['akal.node.type'] === 'nat';
+        if (!isNat) return false;
+        
+        const epIp = config.nodeIpMap?.[e.nodeId];
+        const cleanName = e.containerName.replace(`akal-lab-${projectId}-`, '');
+        return r.target === epIp || targetLower === cleanName.toLowerCase();
+      });
+      return !!matchedNatEp;
+    });
+  }
+
+  private findNatEndpoint(natRoute: any, endpoints: VirtualEndpoint[], config: any, projectId: string): VirtualEndpoint | undefined {
+    if (!natRoute) return undefined;
+    let natEp = endpoints.find(e => {
+      const cleanName = e.containerName.replace(`akal-lab-${projectId}-`, '');
+      return e.containerName === natRoute.target || 
+             cleanName.toLowerCase() === natRoute.target.toLowerCase() ||
+             e.containerName === `akal-lab-${projectId}-${natRoute.target}`;
+    });
+    
+    if (!natEp && config.nodeIpMap) {
+      const matchedNodeId = Object.keys(config.nodeIpMap).find(nodeId => config.nodeIpMap[nodeId] === natRoute.target);
+      if (matchedNodeId) {
+        natEp = endpoints.find(e => e.nodeId === matchedNodeId);
+      }
+    }
+    return natEp;
+  }
+
   public async applyPlan(projectId: string, endpoints: VirtualEndpoint[], intents: NetworkIntent[], config: any): Promise<void> {
     console.log(`[DockerNetworkProvider] Applying network plan for project: ${projectId}`);
 
@@ -41,6 +80,14 @@ export class DockerNetworkProvider implements NetworkProvider {
     const dockerContainers = await docker.listContainers({ all: true });
     const ipMap: Record<string, string> = {};
     const idMap: Record<string, string> = {};
+
+    // Resolve correct container names in endpoints using the real container names from Docker
+    for (const ep of endpoints) {
+      const containerInfo = dockerContainers.find(c => c.Id === ep.nodeId || c.Id.startsWith(ep.nodeId));
+      if (containerInfo && containerInfo.Names && containerInfo.Names.length > 0) {
+        ep.containerName = containerInfo.Names[0].replace(/^\//, '');
+      }
+    }
 
     // 1. Obsolete Docker Subnet Network Cleanup
     const allNetworks = await docker.listNetworks();
@@ -118,9 +165,24 @@ export class DockerNetworkProvider implements NetworkProvider {
           }
 
           const targetNetwork = `akal-subnet-${projectId}-${subnetId}`;
+          const nodeType = containerInfo.Labels?.['akal.node.type'] || 'ubuntu';
 
           for (const netName of currentNetworks) {
             if (netName !== targetNetwork && (netName.startsWith('akal-subnet-') || netName === 'akal-lab-network')) {
+              if (nodeType === 'nat') {
+                const matchedSubnet = (config.subnets || []).find((s: any) => `akal-subnet-${projectId}-${s.id}` === netName);
+                if (matchedSubnet) {
+                  const natRoute = this.findNatRoute(matchedSubnet, endpoints, config, dockerContainers, projectId);
+                  if (natRoute) {
+                    const natEp = this.findNatEndpoint(natRoute, endpoints, config, projectId);
+                    if (natEp && natEp.nodeId === ep.nodeId) {
+                      // Do NOT disconnect NAT Gateway from the private subnet networks it is routing traffic for
+                      continue;
+                    }
+                  }
+                }
+              }
+
               console.log(`[DockerNetworkProvider] Disconnecting container ${ep.containerName} from ${netName}...`);
               try {
                 await docker.getNetwork(netName).disconnect({ Container: containerInfo.Id, Force: true });
@@ -207,6 +269,61 @@ export class DockerNetworkProvider implements NetworkProvider {
       console.warn('[DockerNetworkProvider] Failed to apply host iptables forwarding/NAT bypass:', err);
     }
 
+    // Connect NAT gateways to their private subnets
+    for (const subnet of config.subnets || []) {
+      const natRoute = this.findNatRoute(subnet, endpoints, config, dockerContainers, projectId);
+      if (natRoute) {
+        const natEp = this.findNatEndpoint(natRoute, endpoints, config, projectId);
+        if (natEp) {
+          const natContainerInfo = dockerContainers.find(c => 
+            c.Id === natEp.nodeId ||
+            c.Names.some(name => name.replace(/^\//, '') === natEp.containerName)
+          );
+          if (natContainerInfo && natContainerInfo.State === 'running') {
+            const privateNetName = `akal-subnet-${projectId}-${subnet.id}`;
+            const container = docker.getContainer(natContainerInfo.Id);
+            const inspect = await container.inspect();
+            const currentNets = Object.keys(inspect.NetworkSettings.Networks || {});
+            
+            const cidr = resolvedCidrs[subnet.id] || subnet.cidr || `10.0.${config.subnets.indexOf(subnet) + 1}.0/24`;
+            const prefixMatch = cidr.match(/^(\d+\.\d+\.\d+)\./);
+            const prefix = prefixMatch ? prefixMatch[1] + '.' : '';
+            const targetIp = prefix ? `${prefix}254` : '';
+            
+            const isConnected = currentNets.includes(privateNetName);
+            const currentIp = inspect.NetworkSettings.Networks[privateNetName]?.IPAddress;
+
+            if (!isConnected || currentIp !== targetIp) {
+              if (isConnected) {
+                console.log(`[DockerNetworkProvider] Reconnecting NAT Gateway ${natEp.containerName} to private subnet network ${privateNetName} due to IP mismatch...`);
+                try {
+                  await docker.getNetwork(privateNetName).disconnect({ Container: natContainerInfo.Id, Force: true });
+                } catch {
+                  // Ignore disconnect error
+                }
+              }
+              console.log(`[DockerNetworkProvider] Connecting NAT Gateway ${natEp.containerName} to private subnet network ${privateNetName} with IP ${targetIp}...`);
+              try {
+                // Temporarily clear default route to prevent Docker gateway programming conflicts ("failed to set gateway: file exists")
+                await this.runExec(natContainerInfo.Id, ['ip', 'route', 'del', 'default']).catch(() => {});
+
+                await docker.getNetwork(privateNetName).connect({
+                  Container: natContainerInfo.Id,
+                  EndpointConfig: {
+                    IPAMConfig: {
+                      IPv4Address: targetIp
+                    }
+                  }
+                });
+              } catch (err) {
+                console.error(`Failed to connect NAT Gateway to network ${privateNetName}:`, err);
+              }
+            }
+          }
+        }
+      }
+    }
+
     // 4. Build IP map and ID map using updated network inspects
     const updatedDockerContainers = await docker.listContainers({ all: true });
     for (const ep of endpoints) {
@@ -227,6 +344,7 @@ export class DockerNetworkProvider implements NetworkProvider {
     }
 
     // Configure firewall for each active container
+    const isIgwEnabled = config.vpcConfig?.igwEnabled !== false;
     for (const ep of endpoints) {
       const containerId = idMap[ep.nodeId];
       if (!containerId) continue;
@@ -242,6 +360,20 @@ export class DockerNetworkProvider implements NetworkProvider {
       }
 
       console.log(`[DockerNetworkProvider] Applying firewall rules inside container ${containerId.slice(0, 12)}...`);
+
+      const nodeType = containerInfo.Labels?.['akal.node.type'] || 'ubuntu';
+      if (nodeType === 'nat') {
+        console.log(`[DockerNetworkProvider] Node ${ep.containerName} is a NAT Gateway. Configuring IP forwarding and masquerade...`);
+        await this.runExec(containerId, ['sh', '-c', 'sysctl -w net.ipv4.ip_forward=1']);
+        await this.runExec(containerId, ['sh', '-c', 'iptables -t nat -F POSTROUTING']);
+        await this.runExec(containerId, ['sh', '-c', 'iptables -t nat -A POSTROUTING -j MASQUERADE']);
+        await this.runExec(containerId, ['sh', '-c', 'iptables -F FORWARD 2>/dev/null || true']);
+        if (isIgwEnabled) {
+          await this.runExec(containerId, ['sh', '-c', 'iptables -A FORWARD -j ACCEPT']);
+        } else {
+          await this.runExec(containerId, ['sh', '-c', 'iptables -A FORWARD -j REJECT']);
+        }
+      }
 
       // 1. Initialize custom chains and flush rules
       await this.runExec(containerId, ['sh', '-c', 'iptables -N AKAL-INPUT 2>/dev/null || true']);
@@ -293,13 +425,51 @@ export class DockerNetworkProvider implements NetworkProvider {
       // 2.5. Routing Table & Internet Gateway Enforcement (Evaluated BEFORE conntrack and security groups)
       const subnetId = config.nodeSubnetMap[ep.nodeId];
       const subnet = config.subnets?.find((s: any) => s.id === subnetId);
-      const isIgwEnabled = config.vpcConfig?.igwEnabled !== false;
       const isPublicSubnet = subnet?.type === 'public';
       const hasIgwRoute = subnet?.routes?.some((r: any) => r.destination === '0.0.0.0/0' && r.target === 'igw');
       const hasLocalRoute = subnet?.routes?.some((r: any) => r.destination === (config.vpcConfig?.cidr || '10.0.0.0/16') && r.target === 'local');
 
-      const isInternetAllowed = isIgwEnabled && isPublicSubnet && hasIgwRoute;
+      // Check if this subnet has a NAT Gateway route
+      const natRoute = this.findNatRoute(subnet, endpoints, config, dockerContainers, projectId);
+      const isInternetAllowed = isIgwEnabled && ((isPublicSubnet && hasIgwRoute) || !!natRoute);
       const vpcCidr = config.vpcConfig?.cidr || '10.0.0.0/16';
+
+      // Configure default route for this container based on routing tables
+      if (natRoute) {
+        const cidr = resolvedCidrs[subnetId] || subnet?.cidr || `10.0.${config.subnets.indexOf(subnet) + 1}.0/24`;
+        const prefixMatch = cidr.match(/^(\d+\.\d+\.\d+)\./);
+        const prefix = prefixMatch ? prefixMatch[1] + '.' : '';
+        const natGatewayIpInSubnet = prefix ? `${prefix}254` : '';
+        if (natGatewayIpInSubnet) {
+          console.log(`[DockerNetworkProvider] Setting default gateway for container ${ep.containerName} to NAT Gateway ${natGatewayIpInSubnet}...`);
+          await this.runExec(containerId, ['ip', 'route', 'replace', 'default', 'via', natGatewayIpInSubnet]);
+        }
+      } else {
+        const cidr = resolvedCidrs[subnetId] || subnet?.cidr || `10.0.${config.subnets.indexOf(subnet) + 1}.0/24`;
+        const prefixMatch = cidr.match(/^(\d+\.\d+\.\d+)\./);
+        const prefix = prefixMatch ? prefixMatch[1] + '.' : '';
+        const dockerGatewayIp = prefix ? `${prefix}1` : '';
+        if (dockerGatewayIp) {
+          await this.runExec(containerId, ['ip', 'route', 'replace', 'default', 'via', dockerGatewayIp]);
+        }
+      }
+
+      // Ensure local VPC CIDR is routed via the local Docker bridge gateway (dockerGatewayIp)
+      // to bypass the NAT default route and preserve source IPs for Security Groups.
+      // Skip this for NAT Gateways to prevent routing conflicts when attaching private subnet interfaces.
+      const cidr = resolvedCidrs[subnetId] || subnet?.cidr || `10.0.${config.subnets.indexOf(subnet) + 1}.0/24`;
+      const prefixMatch = cidr.match(/^(\d+\.\d+\.\d+)\./);
+      const prefix = prefixMatch ? prefixMatch[1] + '.' : '';
+      const dockerGatewayIp = prefix ? `${prefix}1` : '';
+      if (nodeType !== 'nat') {
+        if (dockerGatewayIp) {
+          console.log(`[DockerNetworkProvider] Setting local VPC route for container ${ep.containerName} to ${vpcCidr} via ${dockerGatewayIp}...`);
+          await this.runExec(containerId, ['ip', 'route', 'replace', vpcCidr, 'via', dockerGatewayIp]);
+        }
+      } else {
+        // Clean up any existing VPC route in the NAT Gateway container to avoid interface attaching conflicts
+        await this.runExec(containerId, ['ip', 'route', 'del', vpcCidr]);
+      }
 
       if (!hasLocalRoute) {
         // Reject local VPC subnet-to-subnet traffic if local route is deleted
@@ -319,6 +489,10 @@ export class DockerNetworkProvider implements NetworkProvider {
       // 3. Process intents affecting this node (Security Groups)
       for (const intent of intents) {
         if (intent.ownerNodeId !== ep.nodeId) continue;
+        if (nodeType === 'nat' && intent.targetNodeId === ep.nodeId) {
+          // NAT Gateways do not allow direct inbound connections; skip applying rules
+          continue;
+        }
 
         const action = intent.type.startsWith('ALLOW') ? 'ACCEPT' : 'REJECT';
         const isTarget = intent.targetNodeId === ep.nodeId;
@@ -397,6 +571,14 @@ export class DockerNetworkProvider implements NetworkProvider {
   public async cleanupProjectPolicies(projectId: string, endpoints: VirtualEndpoint[]): Promise<void> {
     console.log(`[DockerNetworkProvider] Cleaning up network policies for project: ${projectId}`);
     const dockerContainers = await docker.listContainers({ all: true });
+
+    // Resolve correct container names in endpoints using the real container names from Docker
+    for (const ep of endpoints) {
+      const containerInfo = dockerContainers.find(c => c.Id === ep.nodeId || c.Id.startsWith(ep.nodeId));
+      if (containerInfo && containerInfo.Names && containerInfo.Names.length > 0) {
+        ep.containerName = containerInfo.Names[0].replace(/^\//, '');
+      }
+    }
 
     for (const ep of endpoints) {
       const containerInfo = dockerContainers.find(c => 

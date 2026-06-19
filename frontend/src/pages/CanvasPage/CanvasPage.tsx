@@ -4,6 +4,8 @@ import type { Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 import UbuntuNode from '../../features/nodes/UbuntuNode/UbuntuNode';
+import NatNode from '../../features/nodes/NatNode/NatNode';
+import NatGatewayModal from '../../features/nodes/NatNode/NatGatewayModal';
 import PostgresNode from '../../features/nodes/PostgresNode/PostgresNode';
 import PostgresModal from '../../features/nodes/PostgresNode/PostgresModal';
 import MysqlNode from '../../features/nodes/MysqlNode/MysqlNode';
@@ -97,6 +99,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [inspectingPostgres, setInspectingPostgres] = useState<{ id: string; name: string } | null>(null);
   const [inspectingMysql, setInspectingMysql] = useState<{ id: string; name: string } | null>(null);
+  const [inspectingNat, setInspectingNat] = useState<{ id: string; name: string } | null>(null);
 
   // Phase 3 Modal states
   const [inspectingSubnet, setInspectingSubnet] = useState<{ id: string; name: string } | null>(null);
@@ -143,6 +146,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     ubuntu: UbuntuNode,
     postgres: PostgresNode,
     mysql: MysqlNode,
+    nat: NatNode,
     vpc: VpcNode,
     subnet: SubnetNode
   }), []);
@@ -158,7 +162,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     localStorage.setItem(`akal-lab-network-config-${projectId}`, JSON.stringify(grownConfig));
 
     // Sync to backend to trigger runtime enforcement
-    fetch(`${API_BASE}/api/projects/${projectId}/network-config`, {
+    return fetch(`${API_BASE}/api/projects/${projectId}/network-config`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -166,6 +170,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       body: JSON.stringify({ networkConfig: grownConfig })
     }).catch(err => {
       console.error('Failed to sync network configuration to backend:', err);
+      throw err;
     });
   }, [projectId, containers]);
 
@@ -360,9 +365,13 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const onConnect = useCallback((connection: any) => {
     const { source, target } = connection;
     const targetNode = containers.find(n => n.id === target);
+    const sourceNode = containers.find(n => n.id === source);
     if (!targetNode) return;
     const targetType = targetNode.type || 'ubuntu';
-    const defaultPort = targetType === 'postgres' ? '5432' : targetType === 'mysql' ? '3306' : '80';
+    
+    const isDb = ['postgres', 'mysql'].includes(targetType);
+    const defaultProtocol = isDb ? 'TCP' : 'ALL';
+    const defaultPort = targetType === 'postgres' ? '5432' : targetType === 'mysql' ? '3306' : 'ALL';
 
     const currentRules = networkConfig.nodeSecurityGroups[target] || [];
     const alreadyExists = currentRules.some(r => r.type === 'inbound' && r.action === 'ALLOW' && r.port === defaultPort && r.source === source);
@@ -372,7 +381,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       id: `rule-${Math.random().toString(36).substr(2, 9)}`,
       type: 'inbound',
       action: 'ALLOW',
-      protocol: 'TCP',
+      protocol: defaultProtocol,
       port: defaultPort,
       source: source
     };
@@ -383,7 +392,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     };
     const newConfig = { ...networkConfig, nodeSecurityGroups: updatedSecurityGroups };
     saveNetworkConfig(newConfig);
-    showToast(`Security Group: Allowed Port ${defaultPort} inbound from ${targetNode.name}`);
+    const sourceName = sourceNode?.name || source;
+    showToast(`Security Group: Allowed ${defaultPort === 'ALL' ? 'all traffic' : `Port ${defaultPort}`} inbound from ${sourceName}`);
     triggerArchitectureAudit(newConfig);
   }, [containers, networkConfig, saveNetworkConfig, showToast, triggerArchitectureAudit]);
 
@@ -494,7 +504,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
               vpcConfig: defaultVpcConfig,
               subnets: [],
               nodeSubnetMap: {},
-              nodeSecurityGroups: {}
+              nodeSecurityGroups: {},
+              nodeIpMap: {}
             });
           }
         }
@@ -676,8 +687,10 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             onInspect: (id: string, name: string) => {
               if (nodeType === 'mysql') {
                 setInspectingMysql({ id, name });
-              } else {
+              } else if (nodeType === 'postgres') {
                 setInspectingPostgres({ id, name });
+              } else if (nodeType === 'nat') {
+                setInspectingNat({ id, name });
               }
             },
             onSecurityGroupOpen: (id: string, name: string) => {
@@ -1323,7 +1336,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
               ? "Create PostgreSQL Node"
               : dropState?.type === 'mysql'
                 ? "Create MySQL Node"
-                : "Create Ubuntu Node"
+                : dropState?.type === 'nat'
+                  ? "Create NAT Gateway Node"
+                  : "Create Ubuntu Node"
           }
           label="Give your new container a descriptive name."
           placeholder={
@@ -1331,12 +1346,21 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
               ? "e.g. pg-db, main-store"
               : dropState?.type === 'mysql'
                 ? "e.g. mysql-db, orders"
-                : "e.g. web-server, api-gateway"
+                : dropState?.type === 'nat'
+                  ? "e.g. nat-gateway, internet-exit"
+                  : "e.g. web-server, api-gateway"
           }
           defaultValue={
             (() => {
               const type = dropState?.type || 'ubuntu';
-              const prefix = type === 'postgres' ? 'postgres-' : type === 'mysql' ? 'mysql-' : 'node-';
+              const prefix =
+                type === 'postgres'
+                  ? 'postgres-'
+                  : type === 'mysql'
+                    ? 'mysql-'
+                    : type === 'nat'
+                      ? 'NAT-'
+                      : 'server-';
               let suffix = 1;
               while (containers.some(c => c.name === `${prefix}${suffix}`)) {
                 suffix++;
@@ -1379,30 +1403,31 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         />
       )}
 
+      {inspectingNat && (
+        <NatGatewayModal
+          nodeName={inspectingNat.name}
+          ipAddress={networkConfig.nodeIpMap?.[inspectingNat.id]}
+          state={containers.find(c => c.id === inspectingNat.id)?.state || 'stopped'}
+          onClose={() => setInspectingNat(null)}
+        />
+      )}
+
       {/* Phase 3 Modals */}
       {inspectingSubnet && (
         <RoutingTableModal
           subnetId={inspectingSubnet.id}
           subnetName={inspectingSubnet.name}
           routes={networkConfig.subnets.find(s => s.id === inspectingSubnet.id)?.routes || []}
+          natGateways={containers.filter(c => c.type === 'nat').map(c => c.name)}
           onClose={() => setInspectingSubnet(null)}
-          onAddRoute={(route) => {
+          onSave={async (updatedRoutes) => {
             const updatedSubnets = networkConfig.subnets.map(s => {
               if (s.id === inspectingSubnet.id) {
-                return { ...s, routes: [...s.routes, route] };
+                return { ...s, routes: updatedRoutes };
               }
               return s;
             });
-            saveNetworkConfig({ ...networkConfig, subnets: updatedSubnets });
-          }}
-          onDeleteRoute={(idx) => {
-            const updatedSubnets = networkConfig.subnets.map(s => {
-              if (s.id === inspectingSubnet.id) {
-                return { ...s, routes: s.routes.filter((_, i) => i !== idx) };
-              }
-              return s;
-            });
-            saveNetworkConfig({ ...networkConfig, subnets: updatedSubnets });
+            await saveNetworkConfig({ ...networkConfig, subnets: updatedSubnets });
           }}
         />
       )}

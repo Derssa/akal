@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Server, Database, Library, Network, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Server, Database, Library, Network, Search, Globe } from 'lucide-react';
 
 interface NodeLibraryProps {
   onCollapseChange?: (collapsed: boolean) => void;
@@ -37,6 +37,13 @@ export default function NodeLibrary({ onCollapseChange }: NodeLibraryProps) {
           desc: 'Internal instances only',
           icon: <Network size={18} color="#F59E0B" />,
           collapsedIcon: <Network size={20} color="#F59E0B" />
+        },
+        {
+          type: 'nat',
+          name: 'NAT Gateway',
+          desc: 'Outbound internet routing',
+          icon: <Globe size={18} color="#8B5CF6" />,
+          collapsedIcon: <Globe size={20} color="#8B5CF6" />
         }
       ]
     },

@@ -36,7 +36,7 @@ export default function VpcModal({
   
   // VPC Config State Form
   const [name, setName] = useState(vpcConfig.name);
-  const [cidr, setCidr] = useState(vpcConfig.cidr);
+  const [cidr] = useState(vpcConfig.cidr);
   const [dnsEnabled, setDnsEnabled] = useState(vpcConfig.dnsEnabled);
   const [igwEnabled, setIgwEnabled] = useState(vpcConfig.igwEnabled);
   const [description, setDescription] = useState(vpcConfig.description);
@@ -94,8 +94,33 @@ export default function VpcModal({
     }
 
     const sourceSubnetId = nodeSubnetMap[sourceNode.id];
+    const destSubnetId = nodeSubnetMap[destNode.id];
 
-    // 1. Check Security Group Rules (Destination Inbound Rules)
+    const sourceSubnet = subnets.find(s => s.id === sourceSubnetId);
+    const destSubnet = subnets.find(s => s.id === destSubnetId);
+
+    // 1. Check routing tables for 'local' routes inside VPC
+    const sourceHasLocalRoute = (sourceSubnet as any)?.routes?.some((r: any) => r.target === 'local');
+    if (sourceSubnet && !sourceHasLocalRoute) {
+      setSimulationResult({
+        success: false,
+        message: 'Routing Blocked',
+        details: `Blocked: The source subnet "${sourceSubnet.name}" does not have a route to local VPC CIDR (target: local is missing).`
+      });
+      return;
+    }
+
+    const destHasLocalRoute = (destSubnet as any)?.routes?.some((r: any) => r.target === 'local');
+    if (destSubnet && !destHasLocalRoute) {
+      setSimulationResult({
+        success: false,
+        message: 'Routing Blocked',
+        details: `Blocked: The destination subnet "${destSubnet.name}" does not have a route to local VPC CIDR (target: local is missing).`
+      });
+      return;
+    }
+
+    // 2. Check Security Group Rules (Destination Inbound Rules)
     const destRules = nodeSecurityGroups[destNode.id] || [];
     const inboundRules = destRules.filter(r => r.type === 'inbound');
 
@@ -258,11 +283,18 @@ export default function VpcModal({
                     style={styles.select}
                   >
                     <option value="">-- Select Source --</option>
-                    {nodes.map(n => (
-                      <option key={n.id} value={n.id}>
-                        {n.name} ({nodeSubnetMap[n.id] ? 'Subnet' : 'Root VPC'})
-                      </option>
-                    ))}
+                    {nodes.map(n => {
+                      const subnetId = nodeSubnetMap[n.id];
+                      const subnet = subnets.find(s => s.id === subnetId);
+                      const subnetInfo = subnet 
+                        ? `Subnet: ${subnet.name} [${subnet.type}]` 
+                        : 'No Subnet';
+                      return (
+                        <option key={n.id} value={n.id}>
+                          {n.name} ({subnetInfo})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
@@ -274,11 +306,18 @@ export default function VpcModal({
                     style={styles.select}
                   >
                     <option value="">-- Select Destination --</option>
-                    {nodes.map(n => (
-                      <option key={n.id} value={n.id}>
-                        {n.name} ({nodeSubnetMap[n.id] ? 'Subnet' : 'Root VPC'})
-                      </option>
-                    ))}
+                    {nodes.map(n => {
+                      const subnetId = nodeSubnetMap[n.id];
+                      const subnet = subnets.find(s => s.id === subnetId);
+                      const subnetInfo = subnet 
+                        ? `Subnet: ${subnet.name} [${subnet.type}]` 
+                        : 'No Subnet';
+                      return (
+                        <option key={n.id} value={n.id}>
+                          {n.name} ({subnetInfo})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 

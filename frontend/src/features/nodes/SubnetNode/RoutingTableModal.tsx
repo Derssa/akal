@@ -1,4 +1,5 @@
-import { X, Route, Info } from 'lucide-react';
+import { useState } from 'react';
+import { X, Route, Info, Loader2 } from 'lucide-react';
 
 interface RouteEntry {
   destination: string;
@@ -10,30 +11,47 @@ interface RoutingTableModalProps {
   subnetId: string;
   subnetName: string;
   routes: RouteEntry[];
+  natGateways?: string[];
   onClose: () => void;
-  onAddRoute?: (route: RouteEntry) => void;
-  onDeleteRoute?: (index: number) => void;
+  onSave: (updatedRoutes: RouteEntry[]) => Promise<void>;
 }
 
 export default function RoutingTableModal({
   subnetName,
   routes,
+  natGateways = [],
   onClose,
-  onAddRoute,
-  onDeleteRoute
+  onSave
 }: RoutingTableModalProps) {
+  const [localRoutes, setLocalRoutes] = useState<RouteEntry[]>(routes);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!onAddRoute) return;
     const formData = new FormData(e.currentTarget);
     const destination = formData.get('destination') as string;
     const target = formData.get('target') as string;
     const description = formData.get('description') as string;
 
     if (destination && target) {
-      onAddRoute({ destination, target, description });
+      setLocalRoutes([...localRoutes, { destination, target, description }]);
       e.currentTarget.reset();
+    }
+  };
+
+  const handleDeleteRoute = (index: number) => {
+    setLocalRoutes(localRoutes.filter((_, i) => i !== index));
+  };
+
+  const handleSaveChanges = async () => {
+    setIsSaving(true);
+    try {
+      await onSave(localRoutes);
+      onClose(); // Automatically close the modal after successful save
+    } catch (err) {
+      console.error('Failed to save route changes:', err);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -45,7 +63,15 @@ export default function RoutingTableModal({
             <Route size={18} color="var(--color-accent)" />
             <span style={styles.title}>{subnetName} - Routing Table</span>
           </div>
-          <button onClick={onClose} style={styles.closeBtn}>
+          <button 
+            onClick={onClose} 
+            style={{
+              ...styles.closeBtn,
+              opacity: isSaving ? 0.4 : 1,
+              pointerEvents: isSaving ? 'none' : 'auto'
+            }} 
+            disabled={isSaving}
+          >
             <X size={18} />
           </button>
         </div>
@@ -64,60 +90,102 @@ export default function RoutingTableModal({
                 <th style={styles.th}>Destination CIDR</th>
                 <th style={styles.th}>Target</th>
                 <th style={styles.th}>Description</th>
-                {onDeleteRoute && <th style={styles.thAction}>Action</th>}
+                <th style={styles.thAction}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {routes.map((route, idx) => (
+              {localRoutes.map((route, idx) => (
                 <tr key={idx} style={styles.tr}>
                   <td style={styles.tdCode}><code>{route.destination}</code></td>
                   <td style={styles.tdCode}><code>{route.target}</code></td>
                   <td style={styles.td}>{route.description || 'N/A'}</td>
-                  {onDeleteRoute && (
-                    <td style={styles.tdAction}>
-                      <button 
-                        onClick={() => onDeleteRoute(idx)}
-                        style={styles.deleteBtn}
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  )}
+                  <td style={styles.tdAction}>
+                    <button 
+                      onClick={() => handleDeleteRoute(idx)}
+                      style={{
+                        ...styles.deleteBtn,
+                        opacity: isSaving ? 0.4 : 1,
+                        pointerEvents: isSaving ? 'none' : 'auto'
+                      }}
+                      disabled={isSaving}
+                    >
+                      Remove
+                    </button>
+                  </td>
                 </tr>
               ))}
+              {localRoutes.length === 0 && (
+                <tr>
+                  <td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '12px' }}>
+                    No routes defined. Subnet traffic will be isolated.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
 
-          {onAddRoute && (
-            <div style={styles.formSection}>
-              <h4 style={styles.formTitle}>Add Route Rule</h4>
-              <form onSubmit={handleFormSubmit} style={styles.form}>
-                <input
-                  required
-                  name="destination"
-                  type="text"
-                  placeholder="e.g. 0.0.0.0/0, 10.0.0.0/16"
-                  style={styles.input}
-                />
-                <input
-                  required
-                  name="target"
-                  type="text"
-                  placeholder="e.g. Internet Gateway, local"
-                  style={styles.input}
-                />
-                <input
-                  name="description"
-                  type="text"
-                  placeholder="Rule description (optional)"
-                  style={styles.inputWide}
-                />
-                <button type="submit" style={styles.addBtn}>
-                  Add Route
-                </button>
-              </form>
-            </div>
-          )}
+          <div style={styles.formSection}>
+            <h4 style={styles.formTitle}>Add Route Rule</h4>
+            <form onSubmit={handleFormSubmit} style={styles.form}>
+              <input
+                required
+                disabled={isSaving}
+                name="destination"
+                type="text"
+                placeholder="e.g. 0.0.0.0/0, 10.0.0.0/16"
+                style={styles.input}
+              />
+              <select
+                required
+                disabled={isSaving}
+                name="target"
+                style={styles.select}
+              >
+                <option value="local">local</option>
+                <option value="igw">igw</option>
+                {natGateways.map(nat => (
+                  <option key={nat} value={nat}>{nat}</option>
+                ))}
+              </select>
+              <input
+                disabled={isSaving}
+                name="description"
+                type="text"
+                placeholder="Rule description (optional)"
+                style={styles.inputWide}
+              />
+              <button 
+                type="submit" 
+                style={{
+                  ...styles.addBtn,
+                  opacity: isSaving ? 0.5 : 1,
+                  cursor: isSaving ? 'not-allowed' : 'pointer'
+                }} 
+                disabled={isSaving}
+              >
+                Add Route
+              </button>
+            </form>
+          </div>
+
+          <div style={styles.footerSection}>
+            <button
+              onClick={handleSaveChanges}
+              disabled={isSaving}
+              style={{
+                ...styles.saveBtn,
+                opacity: isSaving ? 0.7 : 1,
+                cursor: isSaving ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
+              {isSaving && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+              {isSaving ? 'Saving Changes...' : 'Save Changes'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -277,6 +345,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     outline: 'none',
   },
+  select: {
+    flex: '1 1 140px',
+    padding: '6px 10px',
+    border: '1px solid var(--border-color)',
+    borderRadius: '6px',
+    fontSize: '12px',
+    outline: 'none',
+    backgroundColor: '#FFFFFF',
+    cursor: 'pointer',
+  },
   inputWide: {
     flex: '2 1 200px',
     padding: '6px 10px',
@@ -294,5 +372,23 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     fontWeight: 600,
     cursor: 'pointer',
+  },
+  footerSection: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    borderTop: '1px solid var(--border-color)',
+    paddingTop: '16px',
+    marginTop: '8px',
+  },
+  saveBtn: {
+    backgroundColor: 'var(--color-accent)',
+    color: '#FFF',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '8px 20px',
+    fontSize: '12px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
   }
 };

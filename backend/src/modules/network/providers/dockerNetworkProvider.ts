@@ -304,6 +304,9 @@ export class DockerNetworkProvider implements NetworkProvider {
               }
               console.log(`[DockerNetworkProvider] Connecting NAT Gateway ${natEp.containerName} to private subnet network ${privateNetName} with IP ${targetIp}...`);
               try {
+                // Temporarily clear default route to prevent Docker gateway programming conflicts ("failed to set gateway: file exists")
+                await this.runExec(natContainerInfo.Id, ['ip', 'route', 'del', 'default']).catch(() => {});
+
                 await docker.getNetwork(privateNetName).connect({
                   Container: natContainerInfo.Id,
                   EndpointConfig: {

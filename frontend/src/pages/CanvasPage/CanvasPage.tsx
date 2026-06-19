@@ -364,9 +364,13 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const onConnect = useCallback((connection: any) => {
     const { source, target } = connection;
     const targetNode = containers.find(n => n.id === target);
+    const sourceNode = containers.find(n => n.id === source);
     if (!targetNode) return;
     const targetType = targetNode.type || 'ubuntu';
-    const defaultPort = targetType === 'postgres' ? '5432' : targetType === 'mysql' ? '3306' : '80';
+    
+    const isDb = ['postgres', 'mysql'].includes(targetType);
+    const defaultProtocol = isDb ? 'TCP' : 'ALL';
+    const defaultPort = targetType === 'postgres' ? '5432' : targetType === 'mysql' ? '3306' : 'ALL';
 
     const currentRules = networkConfig.nodeSecurityGroups[target] || [];
     const alreadyExists = currentRules.some(r => r.type === 'inbound' && r.action === 'ALLOW' && r.port === defaultPort && r.source === source);
@@ -376,7 +380,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       id: `rule-${Math.random().toString(36).substr(2, 9)}`,
       type: 'inbound',
       action: 'ALLOW',
-      protocol: 'TCP',
+      protocol: defaultProtocol,
       port: defaultPort,
       source: source
     };
@@ -387,7 +391,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     };
     const newConfig = { ...networkConfig, nodeSecurityGroups: updatedSecurityGroups };
     saveNetworkConfig(newConfig);
-    showToast(`Security Group: Allowed Port ${defaultPort} inbound from ${targetNode.name}`);
+    const sourceName = sourceNode?.name || source;
+    showToast(`Security Group: Allowed ${defaultPort === 'ALL' ? 'all traffic' : `Port ${defaultPort}`} inbound from ${sourceName}`);
     triggerArchitectureAudit(newConfig);
   }, [containers, networkConfig, saveNetworkConfig, showToast, triggerArchitectureAudit]);
 
@@ -1412,6 +1417,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           subnetId={inspectingSubnet.id}
           subnetName={inspectingSubnet.name}
           routes={networkConfig.subnets.find(s => s.id === inspectingSubnet.id)?.routes || []}
+          natGateways={containers.filter(c => c.type === 'nat').map(c => c.name)}
           onClose={() => setInspectingSubnet(null)}
           onAddRoute={(route) => {
             const updatedSubnets = networkConfig.subnets.map(s => {

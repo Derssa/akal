@@ -10,6 +10,7 @@ interface RoutingTableModalProps {
   subnetId: string;
   subnetName: string;
   routes: RouteEntry[];
+  natGateways?: string[];
   onClose: () => void;
   onAddRoute?: (route: RouteEntry) => void;
   onDeleteRoute?: (index: number) => void;
@@ -18,6 +19,7 @@ interface RoutingTableModalProps {
 export default function RoutingTableModal({
   subnetName,
   routes,
+  natGateways = [],
   onClose,
   onAddRoute,
   onDeleteRoute
@@ -99,13 +101,17 @@ export default function RoutingTableModal({
                   placeholder="e.g. 0.0.0.0/0, 10.0.0.0/16"
                   style={styles.input}
                 />
-                <input
+                <select
                   required
                   name="target"
-                  type="text"
-                  placeholder="e.g. Internet Gateway, local"
-                  style={styles.input}
-                />
+                  style={styles.select}
+                >
+                  <option value="local">local</option>
+                  <option value="igw">igw</option>
+                  {natGateways.map(nat => (
+                    <option key={nat} value={nat}>{nat}</option>
+                  ))}
+                </select>
                 <input
                   name="description"
                   type="text"
@@ -276,6 +282,16 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '6px',
     fontSize: '12px',
     outline: 'none',
+  },
+  select: {
+    flex: '1 1 140px',
+    padding: '6px 10px',
+    border: '1px solid var(--border-color)',
+    borderRadius: '6px',
+    fontSize: '12px',
+    outline: 'none',
+    backgroundColor: '#FFFFFF',
+    cursor: 'pointer',
   },
   inputWide: {
     flex: '2 1 200px',

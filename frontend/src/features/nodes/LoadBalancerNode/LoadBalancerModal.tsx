@@ -17,10 +17,11 @@ interface LoadBalancerModalProps {
   config?: {
     loadBalancerAlgorithm?: 'round_robin' | 'least_conn';
     loadBalancerTargets?: string[];
+    loadBalancerTargetPort?: number;
   };
   allNodes: any[];
   onClose: () => void;
-  onSaveConfig: (algorithm: 'round_robin' | 'least_conn', targets: string[]) => Promise<void>;
+  onSaveConfig: (algorithm: 'round_robin' | 'least_conn', targets: string[], targetPort: number) => Promise<void>;
 }
 
 export default function LoadBalancerModal({
@@ -36,6 +37,7 @@ export default function LoadBalancerModal({
 }: LoadBalancerModalProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'explain' | 'guide' | 'cheatsheet'>('details');
   const [algorithm, setAlgorithm] = useState<'round_robin' | 'least_conn'>(config?.loadBalancerAlgorithm || 'round_robin');
+  const [targetPort, setTargetPort] = useState<number>(config?.loadBalancerTargetPort || 80);
   
   // Get initial targets. If config.loadBalancerTargets doesn't exist, default to empty array
   const [selectedTargets, setSelectedTargets] = useState<string[]>(config?.loadBalancerTargets || []);
@@ -62,7 +64,7 @@ export default function LoadBalancerModal({
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSaveConfig(algorithm, selectedTargets);
+      await onSaveConfig(algorithm, selectedTargets, targetPort);
     } catch (err) {
       console.error(err);
     } finally {
@@ -164,6 +166,19 @@ export default function LoadBalancerModal({
                   <option value="round_robin">Round Robin (Distribute traffic sequentially)</option>
                   <option value="least_conn">Least Connections (Route to target with fewest connections)</option>
                 </select>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.formLabel}>Target Port (on destination servers):</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="65535"
+                  value={targetPort}
+                  onChange={(e) => setTargetPort(parseInt(e.target.value, 10) || 80)}
+                  style={styles.select}
+                  placeholder="e.g. 80, 3000, 5000"
+                />
               </div>
 
               <div style={styles.formGroup}>

@@ -57,10 +57,19 @@ export default function UbuntuNode({ data }: UbuntuNodeProps) {
       </div>
       {data.ip && (
         <div className={styles.details}>
-          <span className={styles.label}>IP:</span>
+          <span className={styles.label}>Private IP:</span>
           <span className={styles.value} style={{ fontWeight: 'bold', color: '#10B981' }}>{data.ip}</span>
         </div>
       )}
+      <div className={styles.details} style={{ marginTop: '-4px' }}>
+        <span className={styles.label}>Public IP:</span>
+        <span className={styles.value} style={{ 
+          color: data.subnetType === 'public' && data.port && isRunning ? '#3B82F6' : '#6B7280', 
+          fontWeight: data.subnetType === 'public' && data.port && isRunning ? 'bold' : 'normal' 
+        }}>
+          {data.subnetType === 'public' && data.port && isRunning ? `localhost:${data.port}` : 'None (Private)'}
+        </span>
+      </div>
 
       <div className={styles.actions}>
         {isRunning ? (

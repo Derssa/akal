@@ -380,9 +380,10 @@ export class DockerNetworkProvider implements NetworkProvider {
         const targets = config.loadBalancerTargets?.[ep.nodeId] || [];
         const targetIps = targets.map((tId: string) => ipMap[tId]).filter(Boolean);
         
+        const targetPort = config.loadBalancerTargetPorts?.[ep.nodeId] || 80;
         let upstreamServers = '';
         if (targetIps.length > 0) {
-          upstreamServers = targetIps.map((ip: string) => `    server ${ip};`).join('\n');
+          upstreamServers = targetIps.map((ip: string) => `    server ${ip}:${targetPort};`).join('\n');
         } else {
           upstreamServers = '    server 127.0.0.1:81 down; # Fallback when no targets are configured';
         }

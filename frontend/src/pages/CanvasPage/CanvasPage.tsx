@@ -61,6 +61,7 @@ interface NetworkConfig {
   nodeIpMap: Record<string, string>; // nodeId -> ipAddress
   loadBalancerAlgorithms?: Record<string, 'round_robin' | 'least_conn'>;
   loadBalancerTargets?: Record<string, string[]>;
+  loadBalancerTargetPorts?: Record<string, number>;
 }
 
 function autoGrowContainers(
@@ -672,9 +673,13 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         }
 
         const nodeType = c.type || 'ubuntu';
+        const subnet = parentId ? networkConfig.subnets.find(s => s.id === parentId) : undefined;
+        const subnetType = subnet?.type || 'private';
+
         const nodeConfig = nodeType === 'loadbalancer' ? {
           loadBalancerAlgorithm: networkConfig.loadBalancerAlgorithms?.[c.id],
           loadBalancerTargets: networkConfig.loadBalancerTargets?.[c.id],
+          loadBalancerTargetPort: networkConfig.loadBalancerTargetPorts?.[c.id],
         } : undefined;
  
         return {
@@ -690,6 +695,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             status: c.status,
             port: c.port,
             ip: networkConfig.nodeIpMap?.[c.id] || 'pending',
+            subnetType,
             config: nodeConfig,
             onStart: startContainer,
             onStop: stopContainer,
@@ -1431,7 +1437,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         />
       )}
 
-      {inspectingLoadBalancer && (
+       {inspectingLoadBalancer && (
         <LoadBalancerModal
           containerId={inspectingLoadBalancer.id}
           nodeName={inspectingLoadBalancer.name}
@@ -1440,11 +1446,12 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           state={containers.find(c => c.id === inspectingLoadBalancer.id)?.state || 'stopped'}
           config={{
             loadBalancerAlgorithm: networkConfig.loadBalancerAlgorithms?.[inspectingLoadBalancer.id],
-            loadBalancerTargets: networkConfig.loadBalancerTargets?.[inspectingLoadBalancer.id]
+            loadBalancerTargets: networkConfig.loadBalancerTargets?.[inspectingLoadBalancer.id],
+            loadBalancerTargetPort: networkConfig.loadBalancerTargetPorts?.[inspectingLoadBalancer.id]
           }}
           allNodes={containers}
           onClose={() => setInspectingLoadBalancer(null)}
-          onSaveConfig={async (algorithm, targets) => {
+          onSaveConfig={async (algorithm, targets, targetPort) => {
             const updatedAlgorithms = {
               ...(networkConfig.loadBalancerAlgorithms || {}),
               [inspectingLoadBalancer.id]: algorithm
@@ -1453,10 +1460,15 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
               ...(networkConfig.loadBalancerTargets || {}),
               [inspectingLoadBalancer.id]: targets
             };
+            const updatedTargetPorts = {
+              ...(networkConfig.loadBalancerTargetPorts || {}),
+              [inspectingLoadBalancer.id]: targetPort
+            };
             const newConfig = {
               ...networkConfig,
               loadBalancerAlgorithms: updatedAlgorithms,
-              loadBalancerTargets: updatedTargets
+              loadBalancerTargets: updatedTargets,
+              loadBalancerTargetPorts: updatedTargetPorts
             };
             await saveNetworkConfig(newConfig);
             showToast("Load Balancer configuration applied");

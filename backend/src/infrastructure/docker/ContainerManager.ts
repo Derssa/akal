@@ -280,6 +280,9 @@ export class ContainerManager {
       createOpts.Tty = true;
       createOpts.OpenStdin = true;
       createOpts.StdinOnce = false;
+      createOpts.HostConfig.PortBindings = {
+        '80/tcp': [{ HostPort: '' }]
+      };
     }
 
     const container = await docker.createContainer(createOpts);
@@ -289,7 +292,8 @@ export class ContainerManager {
 
     let port = '';
     const inspectData = await container.inspect();
-    if (isPostgres || isMysql || isLoadBalancer) {
+    const isUbuntu = type === 'ubuntu';
+    if (isPostgres || isMysql || isLoadBalancer || isUbuntu) {
       const ports = inspectData.NetworkSettings.Ports;
       const targetPortKey = isPostgres ? '5432/tcp' : (isMysql ? '3306/tcp' : '80/tcp');
       if (ports && ports[targetPortKey] && ports[targetPortKey][0]) {

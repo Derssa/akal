@@ -326,6 +326,7 @@ export class DockerNetworkProvider implements NetworkProvider {
     }
 
     // Configure firewall for each active container
+    const isIgwEnabled = config.vpcConfig?.igwEnabled !== false;
     for (const ep of endpoints) {
       const containerId = idMap[ep.nodeId];
       if (!containerId) continue;
@@ -348,7 +349,12 @@ export class DockerNetworkProvider implements NetworkProvider {
         await this.runExec(containerId, ['sh', '-c', 'sysctl -w net.ipv4.ip_forward=1']);
         await this.runExec(containerId, ['sh', '-c', 'iptables -t nat -F POSTROUTING']);
         await this.runExec(containerId, ['sh', '-c', 'iptables -t nat -A POSTROUTING -j MASQUERADE']);
-        await this.runExec(containerId, ['sh', '-c', 'iptables -C FORWARD -j ACCEPT 2>/dev/null || iptables -A FORWARD -j ACCEPT']);
+        await this.runExec(containerId, ['sh', '-c', 'iptables -F FORWARD 2>/dev/null || true']);
+        if (isIgwEnabled) {
+          await this.runExec(containerId, ['sh', '-c', 'iptables -A FORWARD -j ACCEPT']);
+        } else {
+          await this.runExec(containerId, ['sh', '-c', 'iptables -A FORWARD -j REJECT']);
+        }
       }
 
       // 1. Initialize custom chains and flush rules
@@ -401,14 +407,13 @@ export class DockerNetworkProvider implements NetworkProvider {
       // 2.5. Routing Table & Internet Gateway Enforcement (Evaluated BEFORE conntrack and security groups)
       const subnetId = config.nodeSubnetMap[ep.nodeId];
       const subnet = config.subnets?.find((s: any) => s.id === subnetId);
-      const isIgwEnabled = config.vpcConfig?.igwEnabled !== false;
       const isPublicSubnet = subnet?.type === 'public';
       const hasIgwRoute = subnet?.routes?.some((r: any) => r.destination === '0.0.0.0/0' && r.target === 'igw');
       const hasLocalRoute = subnet?.routes?.some((r: any) => r.destination === (config.vpcConfig?.cidr || '10.0.0.0/16') && r.target === 'local');
 
       // Check if this subnet has a NAT Gateway route
       const natRoute = this.findNatRoute(subnet, endpoints, config, dockerContainers, projectId);
-      const isInternetAllowed = (isIgwEnabled && isPublicSubnet && hasIgwRoute) || !!natRoute;
+      const isInternetAllowed = isIgwEnabled && ((isPublicSubnet && hasIgwRoute) || !!natRoute);
       const vpcCidr = config.vpcConfig?.cidr || '10.0.0.0/16';
 
       // Configure default route for this container based on routing tables

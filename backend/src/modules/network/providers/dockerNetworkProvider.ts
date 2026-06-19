@@ -42,6 +42,14 @@ export class DockerNetworkProvider implements NetworkProvider {
     const ipMap: Record<string, string> = {};
     const idMap: Record<string, string> = {};
 
+    // Resolve correct container names in endpoints using the real container names from Docker
+    for (const ep of endpoints) {
+      const containerInfo = dockerContainers.find(c => c.Id === ep.nodeId || c.Id.startsWith(ep.nodeId));
+      if (containerInfo && containerInfo.Names && containerInfo.Names.length > 0) {
+        ep.containerName = containerInfo.Names[0].replace(/^\//, '');
+      }
+    }
+
     // 1. Obsolete Docker Subnet Network Cleanup
     const allNetworks = await docker.listNetworks();
     const activeSubnetIds = (config.subnets || []).map((s: any) => s.id);
@@ -480,6 +488,14 @@ export class DockerNetworkProvider implements NetworkProvider {
   public async cleanupProjectPolicies(projectId: string, endpoints: VirtualEndpoint[]): Promise<void> {
     console.log(`[DockerNetworkProvider] Cleaning up network policies for project: ${projectId}`);
     const dockerContainers = await docker.listContainers({ all: true });
+
+    // Resolve correct container names in endpoints using the real container names from Docker
+    for (const ep of endpoints) {
+      const containerInfo = dockerContainers.find(c => c.Id === ep.nodeId || c.Id.startsWith(ep.nodeId));
+      if (containerInfo && containerInfo.Names && containerInfo.Names.length > 0) {
+        ep.containerName = containerInfo.Names[0].replace(/^\//, '');
+      }
+    }
 
     for (const ep of endpoints) {
       const containerInfo = dockerContainers.find(c => 

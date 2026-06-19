@@ -90,6 +90,9 @@ export default function NatGatewayModal({
                 <p style={styles.infoText}>
                   ℹ️ <strong>Cloud Standard:</strong> In real clouds (AWS, GCP, Azure), NAT Gateways are fully managed services. Users cannot SSH or launch a terminal session on them. They operate purely as serverless routing assets.
                 </p>
+                <p style={{ ...styles.infoText, marginTop: '8px' }}>
+                  🚫 <strong>No Direct Pings:</strong> Real managed NAT Gateways do not respond to direct pings or port connections themselves. They will drop any direct traffic destined for their IP addresses, but they will successfully forward transit traffic (like pings from a private subnet server to 8.8.8.8).
+                </p>
               </div>
             </div>
           )}
@@ -118,7 +121,7 @@ export default function NatGatewayModal({
                 <div style={styles.step}>
                   <div style={styles.stepNumber}>1</div>
                   <div style={styles.stepText}>
-                    <strong>Place NAT in Public Subnet:</strong> Always deploy your NAT Gateway node in a **Public Subnet** (one that has an active internet pathway).
+                    <strong>Place NAT in Public Subnet:</strong> Always deploy your NAT Gateway node in a <strong>Public Subnet</strong> (one that has an active internet pathway).
                   </div>
                 </div>
                 <div style={styles.step}>

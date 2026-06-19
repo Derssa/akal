@@ -449,6 +449,10 @@ export class DockerNetworkProvider implements NetworkProvider {
       // 3. Process intents affecting this node (Security Groups)
       for (const intent of intents) {
         if (intent.ownerNodeId !== ep.nodeId) continue;
+        if (nodeType === 'nat' && intent.targetNodeId === ep.nodeId) {
+          // NAT Gateways do not allow direct inbound connections; skip applying rules
+          continue;
+        }
 
         const action = intent.type.startsWith('ALLOW') ? 'ACCEPT' : 'REJECT';
         const isTarget = intent.targetNodeId === ep.nodeId;

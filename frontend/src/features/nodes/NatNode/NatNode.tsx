@@ -1,5 +1,4 @@
-import { Handle, Position } from '@xyflow/react';
-import { Play, Square, Trash2, Shield, Globe } from 'lucide-react';
+import { Play, Square, Trash2, Globe } from 'lucide-react';
 import styles from '../ServiceNode.module.css';
 
 interface NatNodeProps {
@@ -17,30 +16,10 @@ export default function NatNode({ data }: NatNodeProps) {
         boxShadow: isRunning ? '0 10px 15px -3px rgba(139, 92, 246, 0.15)' : undefined
       }}
     >
-      <Handle type="target" position={Position.Left} className={styles.handle} style={{ backgroundColor: '#8B5CF6' }} />
-
       <div className={styles.header}>
         <div className={styles.titleContainer}>
           <Globe size={18} color={isRunning ? '#8B5CF6' : '#6B7280'} />
           <span className={styles.title} style={{ color: '#6D28D9' }}>{data.name}</span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              data.onSecurityGroupOpen?.(data.id, data.name);
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              marginLeft: '4px',
-            }}
-            title="Configure Security Group (Firewall)"
-          >
-            <Shield size={13} color="#EF4444" fill="rgba(239, 68, 68, 0.1)" />
-          </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

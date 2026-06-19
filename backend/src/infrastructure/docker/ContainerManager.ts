@@ -203,7 +203,11 @@ export class ContainerManager {
       HostConfig: {
         AutoRemove: false,
         NetworkMode: 'akal-lab-network',
-        CapAdd: ['NET_ADMIN']
+        CapAdd: ['NET_ADMIN'],
+        ...(type === 'nat' ? {
+          Privileged: true,
+          Sysctls: { 'net.ipv4.ip_forward': '1' }
+        } : {})
       },
       NetworkingConfig: {
         EndpointsConfig: {

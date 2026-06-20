@@ -12,6 +12,8 @@ import MysqlNode from '../../features/nodes/MysqlNode/MysqlNode';
 import MysqlModal from '../../features/nodes/MysqlNode/MysqlModal';
 import LoadBalancerNode from '../../features/nodes/LoadBalancerNode/LoadBalancerNode';
 import LoadBalancerModal from '../../features/nodes/LoadBalancerNode/LoadBalancerModal';
+import AsgNode from '../../features/nodes/AsgNode/AsgNode';
+import AsgModal from '../../features/nodes/AsgNode/AsgModal';
 import NodeLibrary from './components/NodeLibrary';
 import { useContainers } from '../../shared/hooks/useContainers';
 import { useToast } from '../../shared/hooks/useToast';
@@ -75,6 +77,8 @@ interface NetworkConfig {
   loadBalancerAlgorithms?: Record<string, 'round_robin' | 'least_conn'>;
   loadBalancerTargets?: Record<string, string[]>;
   loadBalancerTargetPorts?: Record<string, number>;
+  loadBalancerRoutingRules?: Record<string, Array<{ path: string; targetId: string }>>;
+  asgs?: Record<string, { desiredCapacity: number; minCapacity: number; maxCapacity: number; parentId: string; subnetIds: string[] }>;
 }
 
 function autoGrowContainers(
@@ -117,6 +121,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const [inspectingMysql, setInspectingMysql] = useState<{ id: string; name: string } | null>(null);
   const [inspectingNat, setInspectingNat] = useState<{ id: string; name: string } | null>(null);
   const [inspectingLoadBalancer, setInspectingLoadBalancer] = useState<{ id: string; name: string } | null>(null);
+  const [inspectingAsg, setInspectingAsg] = useState<{ id: string; name: string } | null>(null);
 
   // Phase 3 Modal states
   const [inspectingSubnet, setInspectingSubnet] = useState<{ id: string; name: string } | null>(null);
@@ -166,7 +171,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     nat: NatNode,
     vpc: VpcNode,
     subnet: SubnetNode,
-    loadbalancer: LoadBalancerNode
+    loadbalancer: LoadBalancerNode,
+    autoscalinggroup: AsgNode
   }), []);
 
   const edgeTypes = useMemo(() => ({
@@ -617,7 +623,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       });
 
       // 2. Map container nodes
-      const containerNodes = containers.map((c, index) => {
+      const containerNodes = containers.filter(c => !c.isAsgInstance).map((c, index) => {
         const existing = prevNodes.find(n => n.id === c.id);
         const defaultX = 150 + (index % 3) * 280;
         const defaultY = 150 + Math.floor(index / 3) * 220;
@@ -649,7 +655,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           }
 
           const isOccupied = (colIdx: number, rowIdx: number, excludeId: string) => {
-            return containers.some(node => {
+            return containers.filter(node => !node.isAsgInstance).some(node => {
               if (node.id === excludeId) return false;
               if (updatedNodeSubnetMap[node.id] !== parentId) return false;
               const nodePos = positionsRef.current[node.name];
@@ -695,6 +701,14 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           loadBalancerTargets: networkConfig.loadBalancerTargets?.[c.id],
           loadBalancerTargetPort: networkConfig.loadBalancerTargetPorts?.[c.id],
         } : undefined;
+
+        const asgConfig = nodeType === 'autoscalinggroup' ? networkConfig.asgs?.[c.id] : undefined;
+        let parentName = '';
+        if (asgConfig && asgConfig.parentId) {
+          const parentNode = containers.find(tc => tc.id === asgConfig.parentId);
+          if (parentNode) parentName = parentNode.name;
+        }
+        const instanceCount = containers.filter(tc => tc.asgId === c.id && tc.isAsgInstance).length;
  
         return {
           ...existing,
@@ -711,10 +725,12 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             ip: networkConfig.nodeIpMap?.[c.id] || 'pending',
             subnetType,
             config: nodeConfig,
+            asgConfig: asgConfig ? { ...asgConfig, parentName } : undefined,
+            instanceCount,
             onStart: startContainer,
             onStop: stopContainer,
             onDelete: (id: string) => setDeleteTarget(id),
-            onTerminalOpen: nodeType === 'loadbalancer' ? () => {} : onTerminalOpen,
+            onTerminalOpen: (nodeType === 'loadbalancer' || nodeType === 'autoscalinggroup') ? () => {} : onTerminalOpen,
             onInspect: (id: string, name: string) => {
               if (nodeType === 'mysql') {
                 setInspectingMysql({ id, name });
@@ -724,6 +740,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                 setInspectingNat({ id, name });
               } else if (nodeType === 'loadbalancer') {
                 setInspectingLoadBalancer({ id, name });
+              } else if (nodeType === 'autoscalinggroup') {
+                setInspectingAsg({ id, name });
               }
             },
             onSecurityGroupOpen: (id: string, name: string) => {
@@ -1438,11 +1456,12 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           config={{
             loadBalancerAlgorithm: networkConfig.loadBalancerAlgorithms?.[inspectingLoadBalancer.id],
             loadBalancerTargets: networkConfig.loadBalancerTargets?.[inspectingLoadBalancer.id],
-            loadBalancerTargetPort: networkConfig.loadBalancerTargetPorts?.[inspectingLoadBalancer.id]
+            loadBalancerTargetPort: networkConfig.loadBalancerTargetPorts?.[inspectingLoadBalancer.id],
+            loadBalancerRoutingRules: networkConfig.loadBalancerRoutingRules?.[inspectingLoadBalancer.id]
           }}
           allNodes={containers}
           onClose={() => setInspectingLoadBalancer(null)}
-          onSaveConfig={async (algorithm, targets, targetPort) => {
+          onSaveConfig={async (algorithm, targets, targetPort, routingRules) => {
             const updatedAlgorithms = {
               ...(networkConfig.loadBalancerAlgorithms || {}),
               [inspectingLoadBalancer.id]: algorithm
@@ -1455,16 +1474,46 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
               ...(networkConfig.loadBalancerTargetPorts || {}),
               [inspectingLoadBalancer.id]: targetPort
             };
+            const updatedRoutingRules = {
+              ...(networkConfig.loadBalancerRoutingRules || {}),
+              [inspectingLoadBalancer.id]: routingRules
+            };
             const newConfig = {
               ...networkConfig,
               loadBalancerAlgorithms: updatedAlgorithms,
               loadBalancerTargets: updatedTargets,
-              loadBalancerTargetPorts: updatedTargetPorts
+              loadBalancerTargetPorts: updatedTargetPorts,
+              loadBalancerRoutingRules: updatedRoutingRules
             };
             await saveNetworkConfig(newConfig);
             showToast("Load Balancer configuration applied");
             triggerArchitectureAudit(newConfig);
           }}
+        />
+      )}
+
+      {inspectingAsg && (
+        <AsgModal
+          asgId={inspectingAsg.id}
+          nodeName={inspectingAsg.name}
+          projectId={projectId}
+          config={networkConfig}
+          containers={containers}
+          onClose={() => setInspectingAsg(null)}
+          onSaveConfig={async (asgConfig) => {
+            const updatedAsgs = {
+              ...(networkConfig.asgs || {}),
+              [inspectingAsg.id]: asgConfig
+            };
+            const newConfig = {
+              ...networkConfig,
+              asgs: updatedAsgs
+            };
+            await saveNetworkConfig(newConfig);
+            showToast("Auto Scaling Group configuration saved");
+            triggerArchitectureAudit(newConfig);
+          }}
+          onRefreshContainers={fetchContainers}
         />
       )}
 

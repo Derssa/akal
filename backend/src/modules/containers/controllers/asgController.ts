@@ -44,7 +44,7 @@ export class AsgController {
       const containers = await AsgService.scaleASG(
         projectId,
         asgId,
-        desiredCapacity || 1,
+        desiredCapacity !== undefined ? desiredCapacity : 1,
         subnetIds
       );
       res.json(containers);

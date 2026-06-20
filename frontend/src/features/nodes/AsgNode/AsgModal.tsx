@@ -45,9 +45,42 @@ export default function AsgModal({
   const [selectedSubnets, setSelectedSubnets] = useState<string[]>(asgData.subnetIds || []);
 
   const [activeTab, setActiveTab] = useState<'details' | 'simulation'>('details');
-  const [saving, setSaving] = useState(false);
   const [deploying, setDeploying] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [terminatingId, setTerminatingId] = useState<string | null>(null);
+  const isScalingRef = useRef(false);
+
+  const isConfigChanged = 
+    desiredCapacity !== asgData.desiredCapacity ||
+    minCapacity !== (asgData.minCapacity || 1) ||
+    maxCapacity !== (asgData.maxCapacity || 4) ||
+    parentId !== (asgData.parentId || '') ||
+    JSON.stringify(selectedSubnets.slice().sort()) !== JSON.stringify((asgData.subnetIds || []).slice().sort());
+
+  const handleMinCapacityChange = (val: number) => {
+    const minVal = Math.max(1, val);
+    setMinCapacity(minVal);
+    if (desiredCapacity < minVal) {
+      setDesiredCapacity(minVal);
+    }
+    if (maxCapacity < minVal) {
+      setMaxCapacity(minVal);
+    }
+  };
+
+  const handleMaxCapacityChange = (val: number) => {
+    const maxVal = Math.max(minCapacity, val);
+    setMaxCapacity(maxVal);
+    if (desiredCapacity > maxVal) {
+      setDesiredCapacity(maxVal);
+    }
+  };
+
+  const handleDesiredCapacityChange = (val: number) => {
+    const desiredVal = Math.max(minCapacity, Math.min(maxCapacity, val));
+    setDesiredCapacity(desiredVal);
+  };
   
   // Auto Simulation States
   const [isAutoSimulating, setIsAutoSimulating] = useState(false);
@@ -126,14 +159,14 @@ export default function AsgModal({
 
       if (simulationMode === 'spike') {
         // Increase traffic load rapidly (+80 req/sec)
-        nextTraffic = Math.min(500, simulatedTraffic + 80);
+        nextTraffic = Math.min(1000, simulatedTraffic + 80);
       } else if (simulationMode === 'idle') {
         // Decrease traffic load rapidly (-80 req/sec)
         nextTraffic = Math.max(10, simulatedTraffic - 80);
       } else {
         // Normal traffic drift
         const trafficDelta = Math.floor(Math.random() * 31) - 15;
-        nextTraffic = Math.max(10, Math.min(500, simulatedTraffic + trafficDelta));
+        nextTraffic = Math.max(10, Math.min(1000, simulatedTraffic + trafficDelta));
       }
 
       // Calculate CPU load dynamically: CPU = Traffic / (Active Instances * Instance Capacity Factor)
@@ -146,24 +179,38 @@ export default function AsgModal({
       setSimulatedTraffic(nextTraffic);
 
       // Trigger automatic scaling based on thresholds (Scale Up at > 75%, Scale Down at < 35%)
-      if (nextCpu > 75 && desiredCapacity < maxCapacity) {
+      if (nextCpu > 75 && desiredCapacity < maxCapacity && !isScalingRef.current) {
         const next = desiredCapacity + 1;
         setDesiredCapacity(next);
-        await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ desiredCapacity: next, subnetIds: selectedSubnets })
-        });
-        await onRefreshContainers();
-      } else if (nextCpu < 35 && desiredCapacity > (asgData.desiredCapacity || 1)) {
+        isScalingRef.current = true;
+        try {
+          await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ desiredCapacity: next, subnetIds: selectedSubnets })
+          });
+          await onRefreshContainers();
+        } catch (err) {
+          console.error(err);
+        } finally {
+          isScalingRef.current = false;
+        }
+      } else if (nextCpu < 35 && desiredCapacity > (asgData.desiredCapacity || 1) && !isScalingRef.current) {
         const next = desiredCapacity - 1;
         setDesiredCapacity(next);
-        await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ desiredCapacity: next, subnetIds: selectedSubnets })
-        });
-        await onRefreshContainers();
+        isScalingRef.current = true;
+        try {
+          await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ desiredCapacity: next, subnetIds: selectedSubnets })
+          });
+          await onRefreshContainers();
+        } catch (err) {
+          console.error(err);
+        } finally {
+          isScalingRef.current = false;
+        }
       }
     }, 1000);
 
@@ -178,9 +225,11 @@ export default function AsgModal({
     );
   };
 
-  const handleSave = async () => {
-    setSaving(true);
+  const handleSaveAndDeploy = async () => {
+    if (!parentId) return;
+    setDeploying(true);
     try {
+      // 1. Save settings
       await onSaveConfig({
         desiredCapacity,
         minCapacity,
@@ -188,27 +237,7 @@ export default function AsgModal({
         parentId,
         subnetIds: selectedSubnets
       });
-      // Save changes trigger scaling API
-      await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          desiredCapacity,
-          subnetIds: selectedSubnets
-        })
-      });
-      await onRefreshContainers();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeploy = async () => {
-    if (!parentId) return;
-    setDeploying(true);
-    try {
+      // 2. Deploy (which commits golden image and scales ASG instances)
       const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/deploy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -225,6 +254,51 @@ export default function AsgModal({
       console.error(err);
     } finally {
       setDeploying(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await onSaveConfig({
+        desiredCapacity,
+        minCapacity,
+        maxCapacity,
+        parentId,
+        subnetIds: selectedSubnets
+      });
+      await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          desiredCapacity,
+          subnetIds: selectedSubnets
+        })
+      });
+      await onRefreshContainers();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStop = async () => {
+    setStopping(true);
+    try {
+      await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          desiredCapacity: 0,
+          subnetIds: selectedSubnets
+        })
+      });
+      await onRefreshContainers();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setStopping(false);
     }
   };
 
@@ -333,62 +407,122 @@ export default function AsgModal({
                 <div style={styles.capacityRow}>
                   <div style={styles.capacityField}>
                     <label style={styles.fieldLabel}>Min Instances</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={maxCapacity}
-                      value={minCapacity}
-                      onChange={(e) => setMinCapacity(parseInt(e.target.value) || 1)}
-                      style={styles.inputNum}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <button 
+                        type="button" 
+                        onClick={() => handleMinCapacityChange(minCapacity - 1)}
+                        style={styles.stepperBtn}
+                      >-</button>
+                      <input
+                        type="number"
+                        min={1}
+                        max={maxCapacity}
+                        value={minCapacity}
+                        onChange={(e) => handleMinCapacityChange(parseInt(e.target.value) || 1)}
+                        style={styles.inputNum}
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => handleMinCapacityChange(minCapacity + 1)}
+                        style={styles.stepperBtn}
+                      >+</button>
+                    </div>
                   </div>
                   <div style={styles.capacityField}>
                     <label style={styles.fieldLabel}>Max Instances</label>
-                    <input
-                      type="number"
-                      min={minCapacity}
-                      max={10}
-                      value={maxCapacity}
-                      onChange={(e) => setMaxCapacity(parseInt(e.target.value) || 4)}
-                      style={styles.inputNum}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <button 
+                        type="button" 
+                        onClick={() => handleMaxCapacityChange(maxCapacity - 1)}
+                        style={styles.stepperBtn}
+                      >-</button>
+                      <input
+                        type="number"
+                        min={minCapacity}
+                        max={10}
+                        value={maxCapacity}
+                        onChange={(e) => handleMaxCapacityChange(parseInt(e.target.value) || 4)}
+                        style={styles.inputNum}
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => handleMaxCapacityChange(maxCapacity + 1)}
+                        style={styles.stepperBtn}
+                      >+</button>
+                    </div>
                   </div>
                   <div style={styles.capacityField}>
                     <label style={styles.fieldLabel}>Desired Instances</label>
-                    <input
-                      type="number"
-                      min={minCapacity}
-                      max={maxCapacity}
-                      value={desiredCapacity}
-                      onChange={(e) => setDesiredCapacity(parseInt(e.target.value) || 1)}
-                      style={styles.inputNum}
-                    />
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <button 
+                        type="button" 
+                        onClick={() => handleDesiredCapacityChange(desiredCapacity - 1)}
+                        style={styles.stepperBtn}
+                      >-</button>
+                      <input
+                        type="number"
+                        min={minCapacity}
+                        max={maxCapacity}
+                        value={desiredCapacity}
+                        onChange={(e) => handleDesiredCapacityChange(parseInt(e.target.value) || 1)}
+                        style={styles.inputNum}
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => handleDesiredCapacityChange(desiredCapacity + 1)}
+                        style={styles.stepperBtn}
+                      >+</button>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Save / Deploy buttons */}
+              {/* Save & Deploy / Stop buttons */}
               <div style={styles.footer}>
-                <button
-                  onClick={handleSave}
-                  disabled={saving || !parentId || selectedSubnets.length === 0}
-                  style={{ ...styles.actionBtn, backgroundColor: '#3B82F6' }}
-                >
-                  {saving ? 'Saving...' : 'Save Settings'}
-                </button>
-                {parentId && (
+                {asgInstances.length > 0 ? (
+                  <div style={{ display: 'flex', gap: '12px', width: '100%', justifyContent: 'flex-end' }}>
+                    {isConfigChanged && (
+                      <button
+                        onClick={handleSave}
+                        disabled={saving || !parentId || selectedSubnets.length === 0}
+                        style={{ ...styles.actionBtn, backgroundColor: '#3B82F6' }}
+                      >
+                        {saving ? 'Saving...' : 'Save Changes'}
+                      </button>
+                    )}
+                    <button
+                      onClick={handleStop}
+                      disabled={stopping}
+                      style={{ ...styles.actionBtn, backgroundColor: '#EF4444' }}
+                    >
+                      {stopping ? (
+                        <>
+                          <RotateCw size={14} className="spin" style={{ marginRight: '6px' }} />
+                          Stopping...
+                        </>
+                      ) : (
+                        'Stop'
+                      )}
+                    </button>
+                  </div>
+                ) : (
                   <button
-                    onClick={handleDeploy}
-                    disabled={deploying}
-                    style={{ ...styles.actionBtn, backgroundColor: '#EC4899' }}
+                    onClick={handleSaveAndDeploy}
+                    disabled={deploying || !parentId || selectedSubnets.length === 0}
+                    style={{
+                      ...styles.actionBtn,
+                      backgroundColor: (!parentId || selectedSubnets.length === 0) ? '#D1D5DB' : '#EC4899',
+                      color: (!parentId || selectedSubnets.length === 0) ? '#9CA3AF' : '#FFFFFF',
+                      cursor: (!parentId || selectedSubnets.length === 0) ? 'not-allowed' : 'pointer'
+                    }}
                   >
                     {deploying ? (
                       <>
                         <RotateCw size={14} className="spin" style={{ marginRight: '6px' }} />
-                        Rolling deployment...
+                        Deploying...
                       </>
                     ) : (
-                      'Create Image & Deploy'
+                      'Save & Deploy'
                     )}
                   </button>
                 )}
@@ -417,11 +551,15 @@ export default function AsgModal({
                   </div>
                   <button
                     onClick={handleToggleAutoSimulation}
+                    disabled={asgInstances.length === 0}
                     style={{
                       ...styles.actionBtn,
-                      backgroundColor: isAutoSimulating ? '#EF4444' : '#10B981',
+                      backgroundColor: isAutoSimulating ? '#EF4444' : (asgInstances.length === 0 ? '#D1D5DB' : '#10B981'),
+                      color: asgInstances.length === 0 ? '#9CA3AF' : '#FFFFFF',
+                      cursor: asgInstances.length === 0 ? 'not-allowed' : 'pointer',
                       padding: '6px 12px',
                     }}
+                    title={asgInstances.length === 0 ? 'Deploy the ASG configuration first to start simulation' : ''}
                   >
                     {isAutoSimulating ? 'Stop Auto-Simulation' : 'Start Auto-Simulation'}
                   </button>
@@ -743,13 +881,35 @@ const styles: Record<string, React.CSSProperties> = {
   capacityField: {
     flex: 1,
   },
-  inputNum: {
-    width: '100%',
-    padding: '6px 10px',
-    borderRadius: '4px',
+  stepperBtn: {
+    backgroundColor: '#F3F4F6',
     border: '1px solid #D1D5DB',
-    fontSize: '12px',
+    color: '#374151',
+    width: '32px',
+    height: '32px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 'bold',
+    fontSize: '16px',
+    cursor: 'pointer',
+    userSelect: 'none',
+    outline: 'none',
+    borderRadius: '4px',
+  },
+  inputNum: {
+    flex: 1,
+    height: '32px',
+    borderTop: '1px solid #D1D5DB',
+    borderBottom: '1px solid #D1D5DB',
+    borderLeft: 'none',
+    borderRight: 'none',
+    fontSize: '13px',
     textAlign: 'center',
+    backgroundColor: '#FFFFFF',
+    fontWeight: '600',
+    outline: 'none',
+    width: '40px',
   },
   footer: {
     display: 'flex',

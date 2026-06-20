@@ -90,6 +90,7 @@ export class DockerNetworkProvider implements NetworkProvider {
     const dockerContainers = await docker.listContainers({ all: true });
     const ipMap: Record<string, string> = {};
     const idMap: Record<string, string> = {};
+    const assignedIps = new Set<string>();
 
     // Resolve correct container names in endpoints using the real container names from Docker
     for (const ep of endpoints) {
@@ -168,6 +169,7 @@ export class DockerNetworkProvider implements NetworkProvider {
           const prefixMatch = cidr.match(/^(\d+\.\d+\.\d+)\./);
           const prefix = prefixMatch ? prefixMatch[1] + '.' : '';
 
+          const targetNetwork = `akal-subnet-${projectId}-${subnetId}`;
           let targetIp = '';
           if (prefix) {
             const configIp = config.nodeIpMap?.[ep.nodeId];
@@ -178,14 +180,33 @@ export class DockerNetworkProvider implements NetworkProvider {
               const suffix = suffixMatch ? suffixMatch[1] : '2';
               targetIp = `${prefix}${suffix}`;
             } else {
-              const subnetEndpoints = endpoints.filter(e => config.nodeSubnetMap[e.nodeId] === subnetId)
-                .sort((a, b) => a.containerName.localeCompare(b.containerName));
-              const idx = subnetEndpoints.findIndex(e => e.nodeId === ep.nodeId);
-              targetIp = `${prefix}${2 + idx}`;
+              // Find all currently used IPs on this subnet
+              const usedIps = new Set<string>();
+              for (const cInfo of dockerContainers) {
+                const nets = cInfo.NetworkSettings?.Networks;
+                if (nets && nets[targetNetwork] && nets[targetNetwork].IPAddress) {
+                  usedIps.add(nets[targetNetwork].IPAddress);
+                }
+              }
+              for (const otherEp of endpoints) {
+                if (otherEp.nodeId !== ep.nodeId && config.nodeSubnetMap[otherEp.nodeId] === subnetId) {
+                  const otherIp = config.nodeIpMap?.[otherEp.nodeId];
+                  if (otherIp && otherIp.startsWith(prefix)) {
+                    usedIps.add(otherIp);
+                  }
+                }
+              }
+              for (const ip of assignedIps) {
+                usedIps.add(ip);
+              }
+              let suffix = 2;
+              while (usedIps.has(`${prefix}${suffix}`)) {
+                suffix++;
+              }
+              targetIp = `${prefix}${suffix}`;
+              assignedIps.add(targetIp);
             }
           }
-
-          const targetNetwork = `akal-subnet-${projectId}-${subnetId}`;
           const nodeType = containerInfo.Labels?.['akal.node.type'] || 'ubuntu';
 
           for (const netName of currentNetworks) {
@@ -224,7 +245,10 @@ export class DockerNetworkProvider implements NetworkProvider {
           const isConnected = currentNetworks.includes(targetNetwork);
           const currentIp = inspect.NetworkSettings.Networks[targetNetwork]?.IPAddress;
 
-          if (!isConnected || currentIp !== targetIp) {
+          // If the container is already connected and has a valid subnet IP, skip reconnecting
+          const hasValidSubnetIp = isConnected && currentIp && prefix && currentIp.startsWith(prefix);
+
+          if (!hasValidSubnetIp && (!isConnected || currentIp !== targetIp)) {
             if (isConnected) {
               console.log(`[DockerNetworkProvider] Reconnecting container ${ep.containerName} to ${targetNetwork} due to IP mismatch...`);
               try {
@@ -387,20 +411,20 @@ export class DockerNetworkProvider implements NetworkProvider {
       }
     }
 
-    // Configure firewall for each active container
+    // Configure firewall for each active container in parallel to speed up scaling and deployments
     const isIgwEnabled = config.vpcConfig?.igwEnabled !== false;
-    for (const ep of endpoints) {
+    await Promise.all(endpoints.map(async ep => {
       const containerId = idMap[ep.nodeId];
-      if (!containerId) continue;
+      if (!containerId) return;
 
       const containerInfo = updatedDockerContainers.find(c => c.Id === containerId);
-      if (!containerInfo) continue;
+      if (!containerInfo) return;
 
       // Check if iptables is available inside this container
       const hasIptables = await this.runExec(containerId, ['sh', '-c', 'command -v iptables || true']);
       if (!hasIptables || hasIptables.includes('not found') || hasIptables.trim() === '') {
         console.warn(`[DockerNetworkProvider] Skipping firewall configuration for container ${containerId.slice(0, 12)} (${ep.containerName}): 'iptables' is not installed.`);
-        continue;
+        return;
       }
 
       console.log(`[DockerNetworkProvider] Applying firewall rules inside container ${containerId.slice(0, 12)}...`);
@@ -800,7 +824,7 @@ ${locationsConfig}
         console.error(`[DockerNetworkProvider] Verification output:\n${iptablesS}`);
         throw new Error(`Firewall verification failed inside container ${containerId.slice(0, 12)}: custom chains were not created/found.`);
       }
-    }
+    }));
   }
 
   public async cleanupProjectPolicies(projectId: string, endpoints: VirtualEndpoint[]): Promise<void> {

@@ -15,6 +15,25 @@ export interface ContainerInfo {
 
 export class ContainerManager {
   private static LAB_PREFIX = 'akal-lab-';
+  private static crashedInstances = new Set<string>();
+
+  public static markAsCrashed(instanceId: string): void {
+    this.crashedInstances.add(instanceId);
+    this.crashedInstances.add(instanceId.slice(0, 12));
+  }
+
+  public static clearCrashed(instanceId: string): void {
+    this.crashedInstances.delete(instanceId);
+    this.crashedInstances.delete(instanceId.slice(0, 12));
+  }
+
+  public static clearAllCrashed(): void {
+    this.crashedInstances.clear();
+  }
+
+  public static isCrashed(instanceId: string): boolean {
+    return this.crashedInstances.has(instanceId) || this.crashedInstances.has(instanceId.slice(0, 12));
+  }
   private static readonly UBUNTU_IMAGE_TAG = 'derssa/backend-lab-ubuntu:v1';
   private static readonly POSTGRES_IMAGE_TAG = 'derssa/backend-lab-postgres:v1';
   private static readonly MYSQL_IMAGE_TAG = 'derssa/backend-lab-mysql:v1';
@@ -197,12 +216,13 @@ export class ContainerManager {
         }
         const asgId = c.Labels['akal.asg.id'];
         const isAsgInstance = c.Labels['akal.asg.instance'] === 'true';
+        const isFakeCrashed = this.isCrashed(c.Id);
         return {
           id: c.Id,
           name: c.Names[0].replace(/^\//, '').replace(`${this.LAB_PREFIX}${projectId}-`, ''),
           image: c.Image,
-          state: c.State,
-          status: c.Status,
+          state: isFakeCrashed ? 'exited' : c.State,
+          status: isFakeCrashed ? 'Exited (0) 1 second ago' : c.Status,
           type: (c.Labels['akal.node.type'] || 'ubuntu') as 'ubuntu' | 'postgres' | 'mysql' | 'nat' | 'loadbalancer' | 'autoscalinggroup',
           port,
           ip,

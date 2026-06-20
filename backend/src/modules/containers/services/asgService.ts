@@ -119,12 +119,8 @@ export class AsgService {
   }
 
   public static async terminateInstance(projectId: string, instanceId: string): Promise<any[]> {
-    console.log(`[AsgService] Simulating failure: Terminating instance ${instanceId}`);
-    try {
-      await ContainerManager.stopContainer(instanceId);
-    } catch (err) {
-      console.error(`Failed to stop instance container:`, err);
-    }
+    console.log(`[AsgService] Simulating failure (Fake crash): ${instanceId}`);
+    ContainerManager.markAsCrashed(instanceId);
 
     // Run health check self-healing check asynchronously to simulate recovery delay
     setTimeout(async () => {
@@ -133,84 +129,19 @@ export class AsgService {
       } catch (err) {
         console.error(`Self-healing routine error:`, err);
       }
-    }, 4000);
+    }, 1500);
 
     return ContainerManager.listContainersByProject(projectId);
   }
 
   public static async runSelfHealing(projectId: string): Promise<void> {
-    console.log(`[AsgService] Running self-healing monitor check for project: ${projectId}`);
-    const config = await ProjectService.getNetworkConfig(projectId);
-    if (!config) return;
-
-    const allContainers = await docker.listContainers({ all: true });
+    console.log(`[AsgService] Running self-healing monitor check (Fake healing) for project: ${projectId}`);
     
-    // Find all ASG definitions in the config
-    const subnets = config.subnets || [];
-    const asgIds = Object.keys(config.nodeSubnetMap || {}).filter(id => {
-      // Find nodes of type 'autoscalinggroup' in the project network config
-      // We will define ASG specifications in networkConfig.asgs: Record<asgId, { desiredCapacity: number, parentId: string, subnetIds: string[] }>
-      return false; // Handled dynamically below via active ASGs config
-    });
+    // Clear fake crashed states to heal the containers
+    ContainerManager.clearAllCrashed();
 
-    const asgsConfig = config.asgs || {};
-    let changesMade = false;
-
-    for (const asgId of Object.keys(asgsConfig)) {
-      const asg = asgsConfig[asgId];
-      const activeInstances = allContainers.filter(
-        c => c.Labels && c.Labels['akal.asg.id'] === asgId && c.Labels['akal.asg.instance'] === 'true'
-      );
-
-      // Check if any instance is stopped/unhealthy
-      const healthyInstances = activeInstances.filter(c => c.State === 'running');
-      const unhealthyCount = activeInstances.length - healthyInstances.length;
-
-      if (healthyInstances.length < asg.desiredCapacity) {
-        console.log(`[AsgService] ASG ${asgId} self-healing active: ${healthyInstances.length} running, target ${asg.desiredCapacity}.`);
-        changesMade = true;
-
-        // 1. Delete stopped/unhealthy containers
-        const unhealthyInstances = activeInstances.filter(c => c.State !== 'running');
-        for (const bad of unhealthyInstances) {
-          console.log(`[AsgService] Cleaning up failed instance container: ${bad.Id.slice(0, 12)}`);
-          try {
-            await ContainerManager.deleteContainer(bad.Id);
-          } catch {}
-          delete config.nodeSubnetMap?.[bad.Id];
-          delete config.nodeSubnetMap?.[bad.Id.slice(0, 12)];
-        }
-
-        // 2. Spawn replacements
-        const needed = asg.desiredCapacity - healthyInstances.length;
-        const imageName = this.getAsgImageName(projectId, asgId);
-
-        for (let i = 0; i < needed; i++) {
-          const randId = Math.random().toString(36).substring(2, 6);
-          const name = `asg-${asgId}-instance-${randId}`;
-
-          const targetSubnetId = asg.subnetIds[i % asg.subnetIds.length];
-          const subnet = subnets.find((s: any) => s.id === targetSubnetId);
-          const isPublic = subnet?.type === 'public';
-
-          const instance = await ContainerManager.createContainer(
-            projectId,
-            name,
-            'ubuntu',
-            isPublic,
-            `${imageName}:latest`,
-            {
-              'akal.asg.id': asgId,
-              'akal.asg.instance': 'true'
-            }
-          );
-          if (!config.nodeSubnetMap) config.nodeSubnetMap = {};
-          config.nodeSubnetMap[instance.id] = targetSubnetId;
-        }
-      }
-    }
-
-    if (changesMade) {
+    const config = await ProjectService.getNetworkConfig(projectId);
+    if (config) {
       await ProjectService.saveNetworkConfig(projectId, config);
       NetworkService.clearPolicyHash(projectId);
       await NetworkService.applyPolicy(projectId, config);

@@ -48,7 +48,6 @@ export default function AsgModal({
   const [saving, setSaving] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [terminatingId, setTerminatingId] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
 
   // Get available template servers (Only general purpose Ubuntu nodes that are NOT ASG instances themselves)
   const availableTemplates = containers.filter(
@@ -145,33 +144,7 @@ export default function AsgModal({
     }
   };
 
-  // Drag and Drop validation for computing template
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
 
-  const handleDragLeave = () => {
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    
-    // Read drag data
-    const draggedNodeId = e.dataTransfer.getData('application/reactflow-node-id');
-    const draggedNodeType = e.dataTransfer.getData('application/reactflow-node-type');
-
-    if (draggedNodeType === 'ubuntu') {
-      const matchedNode = containers.find(c => c.id === draggedNodeId && !c.isAsgInstance);
-      if (matchedNode) {
-        setParentId(matchedNode.id);
-      }
-    } else {
-      alert('Invalid Launch Template: Only Ubuntu compute instances can be linked to the ASG.');
-    }
-  };
 
   return (
     <div style={styles.overlay}>
@@ -206,28 +179,12 @@ export default function AsgModal({
           {activeTab === 'details' ? (
             <div style={styles.tabContent}>
               <div style={styles.grid2Col}>
-                {/* Drag and Drop Zone / Parent Select */}
+                {/* Launch Template select */}
                 <div style={styles.section}>
                   <h3 style={styles.sectionTitle}>1. Launch Template Source</h3>
-                  <div
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    style={{
-                      ...styles.dropZone,
-                      borderColor: isDragOver ? '#EC4899' : '#D1D5DB',
-                      backgroundColor: isDragOver ? 'rgba(236, 72, 153, 0.05)' : 'transparent',
-                    }}
-                  >
-                    <Server size={32} color={parentId ? '#3B82F6' : '#9CA3AF'} style={{ marginBottom: '8px' }} />
-                    <span style={{ fontSize: '12px', color: '#4B5563', fontWeight: 'bold' }}>
-                      {parentId ? `Linked template: ${containers.find(c => c.id === parentId)?.name}` : 'Drag & Drop a Server here'}
-                    </span>
-                    <span style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px' }}>
-                      Or select from list below
-                    </span>
-                  </div>
-
+                  <p style={{ fontSize: '11px', color: '#6B7280', marginBottom: '8px' }}>
+                    Select a parent Ubuntu server to use as the golden launch template for ASG scaling replica copies:
+                  </p>
                   <div style={{ marginTop: '12px' }}>
                     <label style={styles.fieldLabel}>Select Template Server</label>
                     <select
@@ -237,7 +194,7 @@ export default function AsgModal({
                     >
                       <option value="">-- Select template server --</option>
                       {availableTemplates.map(c => (
-                        <option key={c.id} value={c.id}>{c.name} ({c.ip})</option>
+                        <option key={c.id} value={c.id}>{c.name} ({c.ip || 'pending'})</option>
                       ))}
                     </select>
                   </div>

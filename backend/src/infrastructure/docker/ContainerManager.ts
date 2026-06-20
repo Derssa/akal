@@ -6,7 +6,7 @@ export interface ContainerInfo {
   image: string;
   state: string;
   status: string;
-  type?: 'ubuntu' | 'postgres' | 'mysql' | 'nat' | 'loadbalancer';
+  type?: 'ubuntu' | 'postgres' | 'mysql' | 'nat' | 'loadbalancer' | 'autoscalinggroup';
   port?: string;
   ip?: string;
   asgId?: string;
@@ -203,7 +203,7 @@ export class ContainerManager {
           image: c.Image,
           state: c.State,
           status: c.Status,
-          type: (c.Labels['akal.node.type'] || 'ubuntu') as 'ubuntu' | 'postgres' | 'mysql' | 'nat' | 'loadbalancer',
+          type: (c.Labels['akal.node.type'] || 'ubuntu') as 'ubuntu' | 'postgres' | 'mysql' | 'nat' | 'loadbalancer' | 'autoscalinggroup',
           port,
           ip,
           asgId,

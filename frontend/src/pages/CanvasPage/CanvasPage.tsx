@@ -1368,7 +1368,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                   ? "Create NAT Gateway Node"
                   : dropState?.type === 'loadbalancer'
                     ? "Create Load Balancer Node"
-                    : "Create Ubuntu Node"
+                    : dropState?.type === 'autoscalinggroup'
+                      ? "Create Auto Scaling Group Node"
+                      : "Create Ubuntu Node"
           }
           label="Give your new container a descriptive name."
           placeholder={
@@ -1380,7 +1382,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                   ? "e.g. nat-gateway, internet-exit"
                   : dropState?.type === 'loadbalancer'
                     ? "e.g. alb, web-lb"
-                    : "e.g. web-server, api-gateway"
+                    : dropState?.type === 'autoscalinggroup'
+                      ? "e.g. asg-web, main-scaling"
+                      : "e.g. web-server, api-gateway"
           }
           defaultValue={
             (() => {
@@ -1394,7 +1398,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                       ? 'NAT-'
                       : type === 'loadbalancer'
                         ? 'alb-'
-                        : 'server-';
+                        : type === 'autoscalinggroup'
+                          ? 'asg-'
+                          : 'server-';
               let suffix = 1;
               while (containers.some(c => c.name === `${prefix}${suffix}`)) {
                 suffix++;

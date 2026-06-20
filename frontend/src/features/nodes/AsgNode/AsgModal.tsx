@@ -302,6 +302,61 @@ export default function AsgModal({
                 </span>
               </div>
 
+              {/* Manual Scaling Simulation Panel */}
+              <div style={styles.section}>
+                <h3 style={styles.sectionTitle}>Manual Scaling Simulation</h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '12px', color: '#4B5563' }}>
+                    Desired Capacity: <strong style={{ color: '#EC4899', fontSize: '13px' }}>{desiredCapacity}</strong> (Min: {minCapacity}, Max: {maxCapacity})
+                  </span>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={async () => {
+                        const next = Math.max(minCapacity, desiredCapacity - 1);
+                        setDesiredCapacity(next);
+                        await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ desiredCapacity: next, subnetIds: selectedSubnets })
+                        });
+                        await onRefreshContainers();
+                      }}
+                      disabled={desiredCapacity <= minCapacity}
+                      style={{
+                        ...styles.scaleSimBtn,
+                        opacity: desiredCapacity <= minCapacity ? 0.5 : 1,
+                        cursor: desiredCapacity <= minCapacity ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      - Scale Down
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const next = Math.min(maxCapacity, desiredCapacity + 1);
+                        setDesiredCapacity(next);
+                        await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ desiredCapacity: next, subnetIds: selectedSubnets })
+                        });
+                        await onRefreshContainers();
+                      }}
+                      disabled={desiredCapacity >= maxCapacity}
+                      style={{
+                        ...styles.scaleSimBtn,
+                        backgroundColor: '#EC4899',
+                        color: '#FFF',
+                        borderColor: '#EC4899',
+                        opacity: desiredCapacity >= maxCapacity ? 0.5 : 1,
+                        cursor: desiredCapacity >= maxCapacity ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      + Scale Up
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div style={styles.instanceGrid}>
                 {asgInstances.length === 0 ? (
                   <div style={styles.emptyState}>
@@ -383,7 +438,8 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 9999,
   },
   container: {
-    width: '680px',
+    width: '840px',
+    height: '560px',
     backgroundColor: 'var(--bg-surface-solid, #ffffff)',
     border: '1px solid var(--border-color, #E5E7EB)',
     borderRadius: '12px',
@@ -451,7 +507,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   content: {
     padding: '20px',
-    maxHeight: '480px',
+    flex: 1,
     overflowY: 'auto',
   },
   tabContent: {
@@ -560,17 +616,23 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '10px',
   },
   instanceGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '14px',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '10px',
     marginTop: '10px',
   },
   instanceCard: {
+    width: 'calc(25% - 8px)',
+    minWidth: '170px',
     border: '1px solid #E5E7EB',
     borderRadius: '8px',
-    padding: '12px',
+    padding: '10px',
     backgroundColor: '#FFFFFF',
     boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
   },
   instanceHeader: {
     display: 'flex',
@@ -592,11 +654,22 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.15s',
   },
   emptyState: {
-    gridColumn: 'span 2',
+    width: '100%',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     padding: '40px 0',
+  },
+  scaleSimBtn: {
+    padding: '6px 12px',
+    backgroundColor: '#F3F4F6',
+    border: '1px solid #D1D5DB',
+    borderRadius: '4px',
+    fontSize: '11px',
+    fontWeight: 'bold',
+    color: '#374151',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
   }
 };

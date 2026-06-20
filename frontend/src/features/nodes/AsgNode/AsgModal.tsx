@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Cpu, Server, AlertTriangle, RotateCw, Settings, Activity } from 'lucide-react';
 import { API_BASE } from '../../../shared/types';
 import type { ContainerData } from '../../../shared/types';
@@ -64,6 +64,52 @@ export default function AsgModal({
   const asgInstances = containers.filter(
     c => c.asgId === asgId && c.isAsgInstance
   );
+
+  const prevInstancesCountRef = useRef(asgInstances.length);
+
+  // Monitor replica scale count to auto-reset load back to normal once replicas scale out/in
+  useEffect(() => {
+    if (!isAutoSimulating) {
+      prevInstancesCountRef.current = asgInstances.length;
+      return;
+    }
+
+    if (simulationMode === 'spike' && asgInstances.length > prevInstancesCountRef.current) {
+      // Scale out successfully handled load! Reset back to normal load
+      setSimulationMode('normal');
+      setSimulatedCpu(45);
+      setSimulatedTraffic(120);
+    } else if (simulationMode === 'idle' && asgInstances.length < prevInstancesCountRef.current) {
+      // Scale in successfully stabilized! Reset back to normal load
+      setSimulationMode('normal');
+      setSimulatedCpu(45);
+      setSimulatedTraffic(120);
+    }
+
+    prevInstancesCountRef.current = asgInstances.length;
+  }, [asgInstances.length, isAutoSimulating, simulationMode]);
+
+  const handleToggleAutoSimulation = async () => {
+    const nextAuto = !isAutoSimulating;
+    setIsAutoSimulating(nextAuto);
+    if (!nextAuto) {
+      // Stopping simulation: kill added instances by resetting desiredCapacity to minCapacity
+      setDesiredCapacity(minCapacity);
+      setSimulationMode('normal');
+      setSimulatedCpu(45);
+      setSimulatedTraffic(120);
+      try {
+        await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ desiredCapacity: minCapacity, subnetIds: selectedSubnets })
+        });
+        await onRefreshContainers();
+      } catch (err) {
+        console.error('Failed to reset ASG capacity on simulation stop:', err);
+      }
+    }
+  };
 
   // Trigger self-healing monitor query every 2 seconds when simulation tab is active
   useEffect(() => {
@@ -372,7 +418,7 @@ export default function AsgModal({
                     </span>
                   </div>
                   <button
-                    onClick={() => setIsAutoSimulating(!isAutoSimulating)}
+                    onClick={handleToggleAutoSimulation}
                     style={{
                       ...styles.actionBtn,
                       backgroundColor: isAutoSimulating ? '#EF4444' : '#10B981',
@@ -455,60 +501,6 @@ export default function AsgModal({
                 )}
               </div>
 
-              {/* Manual Scaling Simulation Panel */}
-              <div style={styles.section}>
-                <h3 style={styles.sectionTitle}>Manual Scaling Simulation</h3>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '12px', color: '#4B5563' }}>
-                    Desired Capacity: <strong style={{ color: '#EC4899', fontSize: '13px' }}>{desiredCapacity}</strong> (Min: {minCapacity}, Max: {maxCapacity})
-                  </span>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={async () => {
-                        const next = Math.max(minCapacity, desiredCapacity - 1);
-                        setDesiredCapacity(next);
-                        await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ desiredCapacity: next, subnetIds: selectedSubnets })
-                        });
-                        await onRefreshContainers();
-                      }}
-                      disabled={desiredCapacity <= minCapacity}
-                      style={{
-                        ...styles.scaleSimBtn,
-                        opacity: desiredCapacity <= minCapacity ? 0.5 : 1,
-                        cursor: desiredCapacity <= minCapacity ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      - Scale Down
-                    </button>
-                    <button
-                      onClick={async () => {
-                        const next = Math.min(maxCapacity, desiredCapacity + 1);
-                        setDesiredCapacity(next);
-                        await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ desiredCapacity: next, subnetIds: selectedSubnets })
-                        });
-                        await onRefreshContainers();
-                      }}
-                      disabled={desiredCapacity >= maxCapacity}
-                      style={{
-                        ...styles.scaleSimBtn,
-                        backgroundColor: '#EC4899',
-                        color: '#FFF',
-                        borderColor: '#EC4899',
-                        opacity: desiredCapacity >= maxCapacity ? 0.5 : 1,
-                        cursor: desiredCapacity >= maxCapacity ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      + Scale Up
-                    </button>
-                  </div>
-                </div>
-              </div>
 
               <div style={styles.instanceGrid}>
                 {asgInstances.length === 0 ? (

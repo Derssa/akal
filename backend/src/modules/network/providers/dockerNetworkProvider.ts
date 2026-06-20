@@ -34,7 +34,11 @@ export class DockerNetworkProvider implements NetworkProvider {
         throw new Error(`Command failed inside container with exit code ${status.ExitCode}. Output: ${output}`);
       }
       return output;
-    } catch (err) {
+    } catch (err: any) {
+      if (err.statusCode === 404 || err.message?.includes('no such container') || err.message?.includes('No such container')) {
+        console.warn(`[DockerNetworkProvider] Container ${containerId.slice(0, 12)} not found during exec [${cmd.join(' ')}]. Skipping.`);
+        return '';
+      }
       console.error(`Exec failed for cmd [${cmd.join(' ')}]:`, err);
       throw err;
     }

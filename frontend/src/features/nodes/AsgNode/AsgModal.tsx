@@ -89,8 +89,9 @@ export default function AsgModal({
     const nextAuto = !isAutoSimulating;
     setIsAutoSimulating(nextAuto);
     if (!nextAuto) {
-      // Stopping simulation: kill all replicas by resetting desiredCapacity to 0
-      setDesiredCapacity(0);
+      // Stopping simulation: reset desiredCapacity back to user's configured desired capacity
+      const baseDesired = asgData.desiredCapacity || 1;
+      setDesiredCapacity(baseDesired);
       setSimulationMode('normal');
       setSimulatedCpu(45);
       setSimulatedTraffic(120);
@@ -98,7 +99,7 @@ export default function AsgModal({
         await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ desiredCapacity: 0, subnetIds: selectedSubnets })
+          body: JSON.stringify({ desiredCapacity: baseDesired, subnetIds: selectedSubnets })
         });
         await onRefreshContainers();
       } catch (err) {
@@ -154,7 +155,7 @@ export default function AsgModal({
           body: JSON.stringify({ desiredCapacity: next, subnetIds: selectedSubnets })
         });
         await onRefreshContainers();
-      } else if (nextCpu < 35 && desiredCapacity > minCapacity) {
+      } else if (nextCpu < 35 && desiredCapacity > (asgData.desiredCapacity || 1)) {
         const next = desiredCapacity - 1;
         setDesiredCapacity(next);
         await fetch(`${API_BASE}/api/projects/${projectId}/containers/asg/${asgId}/scale`, {
@@ -167,7 +168,7 @@ export default function AsgModal({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isAutoSimulating, simulatedCpu, simulatedTraffic, simulationMode, desiredCapacity, minCapacity, maxCapacity, asgId, projectId, selectedSubnets, onRefreshContainers, asgInstances.length]);
+  }, [isAutoSimulating, simulatedCpu, simulatedTraffic, simulationMode, desiredCapacity, minCapacity, maxCapacity, asgId, projectId, selectedSubnets, onRefreshContainers, asgInstances.length, asgData.desiredCapacity]);
 
   const handleToggleSubnet = (subnetId: string) => {
     setSelectedSubnets(prev =>

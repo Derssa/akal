@@ -12,6 +12,8 @@ import MysqlNode from '../../features/nodes/MysqlNode/MysqlNode';
 import MysqlModal from '../../features/nodes/MysqlNode/MysqlModal';
 import LoadBalancerNode from '../../features/nodes/LoadBalancerNode/LoadBalancerNode';
 import LoadBalancerModal from '../../features/nodes/LoadBalancerNode/LoadBalancerModal';
+import AsgNode from '../../features/nodes/AsgNode/AsgNode';
+import AsgModal from '../../features/nodes/AsgNode/AsgModal';
 import NodeLibrary from './components/NodeLibrary';
 import { useContainers } from '../../shared/hooks/useContainers';
 import { useToast } from '../../shared/hooks/useToast';
@@ -75,6 +77,8 @@ interface NetworkConfig {
   loadBalancerAlgorithms?: Record<string, 'round_robin' | 'least_conn'>;
   loadBalancerTargets?: Record<string, string[]>;
   loadBalancerTargetPorts?: Record<string, number>;
+  loadBalancerRoutingRules?: Record<string, Array<{ path: string; targetId: string }>>;
+  asgs?: Record<string, { desiredCapacity: number; minCapacity: number; maxCapacity: number; parentId: string; subnetIds: string[] }>;
 }
 
 function autoGrowContainers(
@@ -117,6 +121,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const [inspectingMysql, setInspectingMysql] = useState<{ id: string; name: string } | null>(null);
   const [inspectingNat, setInspectingNat] = useState<{ id: string; name: string } | null>(null);
   const [inspectingLoadBalancer, setInspectingLoadBalancer] = useState<{ id: string; name: string } | null>(null);
+  const [inspectingAsg, setInspectingAsg] = useState<{ id: string; name: string } | null>(null);
 
   // Phase 3 Modal states
   const [inspectingSubnet, setInspectingSubnet] = useState<{ id: string; name: string } | null>(null);
@@ -166,7 +171,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     nat: NatNode,
     vpc: VpcNode,
     subnet: SubnetNode,
-    loadbalancer: LoadBalancerNode
+    loadbalancer: LoadBalancerNode,
+    autoscalinggroup: AsgNode
   }), []);
 
   const edgeTypes = useMemo(() => ({
@@ -617,7 +623,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       });
 
       // 2. Map container nodes
-      const containerNodes = containers.map((c, index) => {
+      const containerNodes = containers.filter(c => !c.isAsgInstance).map((c, index) => {
         const existing = prevNodes.find(n => n.id === c.id);
         const defaultX = 150 + (index % 3) * 280;
         const defaultY = 150 + Math.floor(index / 3) * 220;
@@ -649,7 +655,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           }
 
           const isOccupied = (colIdx: number, rowIdx: number, excludeId: string) => {
-            return containers.some(node => {
+            return containers.filter(node => !node.isAsgInstance).some(node => {
               if (node.id === excludeId) return false;
               if (updatedNodeSubnetMap[node.id] !== parentId) return false;
               const nodePos = positionsRef.current[node.name];
@@ -695,6 +701,14 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           loadBalancerTargets: networkConfig.loadBalancerTargets?.[c.id],
           loadBalancerTargetPort: networkConfig.loadBalancerTargetPorts?.[c.id],
         } : undefined;
+
+        const asgConfig = nodeType === 'autoscalinggroup' ? networkConfig.asgs?.[c.id] : undefined;
+        let parentName = '';
+        if (asgConfig && asgConfig.parentId) {
+          const parentNode = containers.find(tc => tc.id === asgConfig.parentId);
+          if (parentNode) parentName = parentNode.name;
+        }
+        const instanceCount = containers.filter(tc => tc.asgId === c.id && tc.isAsgInstance).length;
  
         return {
           ...existing,
@@ -711,10 +725,26 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
             ip: networkConfig.nodeIpMap?.[c.id] || 'pending',
             subnetType,
             config: nodeConfig,
+            asgConfig: asgConfig ? { ...asgConfig, parentName } : undefined,
+            instanceCount,
             onStart: startContainer,
             onStop: stopContainer,
-            onDelete: (id: string) => setDeleteTarget(id),
-            onTerminalOpen: nodeType === 'loadbalancer' ? () => {} : onTerminalOpen,
+            onDelete: (id: string) => {
+              const usingAsgs = Object.keys(networkConfig?.asgs || {}).filter(asgId => networkConfig?.asgs?.[asgId]?.parentId === id);
+              const hasActiveAsg = usingAsgs.some(asgId => {
+                const container = containers.find(c => c.id === asgId);
+                return container && container.state === 'running';
+              });
+              if (hasActiveAsg) {
+                showNotification({
+                  type: 'error',
+                  message: `Cannot delete node: it is used as a template by an active Auto Scaling Group. Please stop the ASG first.`
+                });
+                return;
+              }
+              setDeleteTarget(id);
+            },
+            onTerminalOpen: (nodeType === 'loadbalancer' || nodeType === 'autoscalinggroup') ? () => {} : onTerminalOpen,
             onInspect: (id: string, name: string) => {
               if (nodeType === 'mysql') {
                 setInspectingMysql({ id, name });
@@ -724,6 +754,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                 setInspectingNat({ id, name });
               } else if (nodeType === 'loadbalancer') {
                 setInspectingLoadBalancer({ id, name });
+              } else if (nodeType === 'autoscalinggroup') {
+                setInspectingAsg({ id, name });
               }
             },
             onSecurityGroupOpen: (id: string, name: string) => {
@@ -1042,6 +1074,23 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   }, [reactFlowInstance, networkConfig, projectId, saveNetworkConfig, setNodes, triggerArchitectureAudit, showNotification]);
 
   const onNodesDelete = useCallback((deleted: Node[]) => {
+    const blockedNode = deleted.find(node => {
+      const usingAsgs = Object.keys(networkConfig?.asgs || {}).filter(asgId => networkConfig?.asgs?.[asgId]?.parentId === node.id);
+      return usingAsgs.some(asgId => {
+        const container = containers.find(c => c.id === asgId);
+        return container && container.state === 'running';
+      });
+    });
+
+    if (blockedNode) {
+      showNotification({
+        type: 'error',
+        message: `Cannot delete node "${blockedNode.data?.name || 'Node'}": it is used as a template by an active Auto Scaling Group. Please stop the ASG first.`
+      });
+      fetchContainers();
+      return;
+    }
+
     let updatedSubnets = [...networkConfig.subnets];
     const updatedNodeSubnetMap = { ...networkConfig.nodeSubnetMap };
     const updatedSecurityGroups = { ...networkConfig.nodeSecurityGroups };
@@ -1076,7 +1125,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
         nodeIpMap: updatedNodeIpMap
       });
     }
-  }, [networkConfig, saveNetworkConfig]);
+  }, [networkConfig, saveNetworkConfig, containers, fetchContainers, showNotification]);
 
   const saveGraphLocally = () => {
     const currentPositions: Record<string, { x: number; y: number }> = {};
@@ -1350,7 +1399,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                   ? "Create NAT Gateway Node"
                   : dropState?.type === 'loadbalancer'
                     ? "Create Load Balancer Node"
-                    : "Create Ubuntu Node"
+                    : dropState?.type === 'autoscalinggroup'
+                      ? "Create Auto Scaling Group Node"
+                      : "Create Ubuntu Node"
           }
           label="Give your new container a descriptive name."
           placeholder={
@@ -1362,7 +1413,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                   ? "e.g. nat-gateway, internet-exit"
                   : dropState?.type === 'loadbalancer'
                     ? "e.g. alb, web-lb"
-                    : "e.g. web-server, api-gateway"
+                    : dropState?.type === 'autoscalinggroup'
+                      ? "e.g. asg-web, main-scaling"
+                      : "e.g. web-server, api-gateway"
           }
           defaultValue={
             (() => {
@@ -1376,7 +1429,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                       ? 'NAT-'
                       : type === 'loadbalancer'
                         ? 'alb-'
-                        : 'server-';
+                        : type === 'autoscalinggroup'
+                          ? 'asg-'
+                          : 'server-';
               let suffix = 1;
               while (containers.some(c => c.name === `${prefix}${suffix}`)) {
                 suffix++;
@@ -1438,11 +1493,12 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           config={{
             loadBalancerAlgorithm: networkConfig.loadBalancerAlgorithms?.[inspectingLoadBalancer.id],
             loadBalancerTargets: networkConfig.loadBalancerTargets?.[inspectingLoadBalancer.id],
-            loadBalancerTargetPort: networkConfig.loadBalancerTargetPorts?.[inspectingLoadBalancer.id]
+            loadBalancerTargetPort: networkConfig.loadBalancerTargetPorts?.[inspectingLoadBalancer.id],
+            loadBalancerRoutingRules: networkConfig.loadBalancerRoutingRules?.[inspectingLoadBalancer.id]
           }}
           allNodes={containers}
           onClose={() => setInspectingLoadBalancer(null)}
-          onSaveConfig={async (algorithm, targets, targetPort) => {
+          onSaveConfig={async (algorithm, targets, targetPort, routingRules) => {
             const updatedAlgorithms = {
               ...(networkConfig.loadBalancerAlgorithms || {}),
               [inspectingLoadBalancer.id]: algorithm
@@ -1455,16 +1511,46 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
               ...(networkConfig.loadBalancerTargetPorts || {}),
               [inspectingLoadBalancer.id]: targetPort
             };
+            const updatedRoutingRules = {
+              ...(networkConfig.loadBalancerRoutingRules || {}),
+              [inspectingLoadBalancer.id]: routingRules
+            };
             const newConfig = {
               ...networkConfig,
               loadBalancerAlgorithms: updatedAlgorithms,
               loadBalancerTargets: updatedTargets,
-              loadBalancerTargetPorts: updatedTargetPorts
+              loadBalancerTargetPorts: updatedTargetPorts,
+              loadBalancerRoutingRules: updatedRoutingRules
             };
             await saveNetworkConfig(newConfig);
             showToast("Load Balancer configuration applied");
             triggerArchitectureAudit(newConfig);
           }}
+        />
+      )}
+
+      {inspectingAsg && (
+        <AsgModal
+          asgId={inspectingAsg.id}
+          nodeName={inspectingAsg.name}
+          projectId={projectId}
+          config={networkConfig}
+          containers={containers}
+          onClose={() => setInspectingAsg(null)}
+          onSaveConfig={async (asgConfig) => {
+            const updatedAsgs = {
+              ...(networkConfig.asgs || {}),
+              [inspectingAsg.id]: asgConfig
+            };
+            const newConfig = {
+              ...networkConfig,
+              asgs: updatedAsgs
+            };
+            await saveNetworkConfig(newConfig);
+            showToast("Auto Scaling Group configuration saved");
+            triggerArchitectureAudit(newConfig);
+          }}
+          onRefreshContainers={fetchContainers}
         />
       )}
 

@@ -4,6 +4,7 @@ import { EnforcementPlanner } from '../planner/enforcementPlanner';
 import { VirtualNetworkMapper } from '../mapper/virtualNetworkMapper';
 import { DockerNetworkProvider } from '../providers/dockerNetworkProvider';
 import { NetworkProvider } from '../providers/networkProvider';
+import docker from '../../../infrastructure/docker/DockerClient';
 
 export class NetworkService {
   private static provider: NetworkProvider = new DockerNetworkProvider();
@@ -27,7 +28,7 @@ export class NetworkService {
     console.log(`[NetworkService] Policy change detected for project: ${projectId}. Recomputing...`);
 
     // 2. Compute normalized rules (Policy Engine layer)
-    const rules = this.computeSemanticRules(projectId, config);
+    const rules = await this.computeSemanticRules(projectId, config);
 
     // 3. enforcement planner compiling rules to intents
     const intents = EnforcementPlanner.plan(projectId, rules);
@@ -53,14 +54,49 @@ export class NetworkService {
     delete this.policyHashes[projectId];
   }
 
-  private static computeSemanticRules(projectId: string, config: any): SemanticRule[] {
+  private static async computeSemanticRules(projectId: string, config: any): Promise<SemanticRule[]> {
     const rules: SemanticRule[] = [];
     const nodeIds = Object.keys(config.nodeSubnetMap || {});
     const sgs = config.nodeSecurityGroups || {};
 
+    // Gather all active ASG replica containers and match them to their ASG configurations
+    const dockerContainers = await docker.listContainers({ all: true });
+    const asgReplicas: Record<string, string[]> = {};
+    for (const c of dockerContainers) {
+      const asgId = c.Labels?.['akal.asg.id'];
+      if (asgId && c.State === 'running') {
+        if (!asgReplicas[asgId]) asgReplicas[asgId] = [];
+        asgReplicas[asgId].push(c.Id);
+      }
+    }
+
+    const resolveRuntimeIds = (id: string): string[] => {
+      if (asgReplicas[id]) {
+        return asgReplicas[id];
+      }
+      return [id];
+    };
+
     // Get all running nodes inside project subnets
     for (const srcNodeId of nodeIds) {
-      const nodeSgRules = sgs[srcNodeId] || [];
+      let nodeSgRules = sgs[srcNodeId] || [];
+
+      // If the node ID corresponds to an active replica container, find which ASG it belongs to and inherit its rules
+      const containerInfo = dockerContainers.find(c => c.Id === srcNodeId || c.Id.startsWith(srcNodeId));
+      const asgId = containerInfo?.Labels?.['akal.asg.id'];
+      
+      if (asgId) {
+        const asgConfig = config.asgs?.[asgId];
+        if (asgConfig && asgConfig.parentId) {
+          nodeSgRules = sgs[asgConfig.parentId] || [];
+        }
+      } else {
+        // Also keep direct ASG inheritance if config lists the ASG boundary node ID itself
+        const asgConfig = config.asgs?.[srcNodeId];
+        if (asgConfig && asgConfig.parentId) {
+          nodeSgRules = sgs[asgConfig.parentId] || [];
+        }
+      }
 
       // Process outbound rules for source node
       for (const sgRule of nodeSgRules) {
@@ -107,8 +143,11 @@ export class NetworkService {
               }
             }
           } else {
-            // Outbound to specific node ID
-            addOutboundRule(sgRule.source);
+            // Outbound to specific node ID (can resolve to multiple runtime IDs if destination is an ASG)
+            const resolvedDsts = resolveRuntimeIds(sgRule.source);
+            for (const dst of resolvedDsts) {
+              addOutboundRule(dst);
+            }
           }
         }
       }
@@ -158,8 +197,11 @@ export class NetworkService {
               }
             }
           } else {
-            // Inbound from specific node ID
-            addInboundRule(sgRule.source);
+            // Inbound from specific node ID (can resolve to multiple runtime IDs if source is an ASG)
+            const resolvedSrcs = resolveRuntimeIds(sgRule.source);
+            for (const src of resolvedSrcs) {
+              addInboundRule(src);
+            }
           }
         }
       }

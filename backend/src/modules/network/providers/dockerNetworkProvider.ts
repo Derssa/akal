@@ -34,7 +34,14 @@ export class DockerNetworkProvider implements NetworkProvider {
         throw new Error(`Command failed inside container with exit code ${status.ExitCode}. Output: ${output}`);
       }
       return output;
-    } catch (err) {
+    } catch (err: any) {
+      if (err.statusCode === 404 || err.message?.includes('no such container') || err.message?.includes('No such container')) {
+        console.warn(`[DockerNetworkProvider] Container ${containerId.slice(0, 12)} not found during exec [${cmd.join(' ')}]. Skipping.`);
+        return '';
+      }
+      if (cmd[0] === 'ip' && cmd[1] === 'route' && cmd[2] === 'del' && err.message?.includes('No such process')) {
+        return '';
+      }
       console.error(`Exec failed for cmd [${cmd.join(' ')}]:`, err);
       throw err;
     }
@@ -86,6 +93,7 @@ export class DockerNetworkProvider implements NetworkProvider {
     const dockerContainers = await docker.listContainers({ all: true });
     const ipMap: Record<string, string> = {};
     const idMap: Record<string, string> = {};
+    const assignedIps = new Set<string>();
 
     // Resolve correct container names in endpoints using the real container names from Docker
     for (const ep of endpoints) {
@@ -164,6 +172,7 @@ export class DockerNetworkProvider implements NetworkProvider {
           const prefixMatch = cidr.match(/^(\d+\.\d+\.\d+)\./);
           const prefix = prefixMatch ? prefixMatch[1] + '.' : '';
 
+          const targetNetwork = `akal-subnet-${projectId}-${subnetId}`;
           let targetIp = '';
           if (prefix) {
             const configIp = config.nodeIpMap?.[ep.nodeId];
@@ -174,14 +183,33 @@ export class DockerNetworkProvider implements NetworkProvider {
               const suffix = suffixMatch ? suffixMatch[1] : '2';
               targetIp = `${prefix}${suffix}`;
             } else {
-              const subnetEndpoints = endpoints.filter(e => config.nodeSubnetMap[e.nodeId] === subnetId)
-                .sort((a, b) => a.containerName.localeCompare(b.containerName));
-              const idx = subnetEndpoints.findIndex(e => e.nodeId === ep.nodeId);
-              targetIp = `${prefix}${2 + idx}`;
+              // Find all currently used IPs on this subnet
+              const usedIps = new Set<string>();
+              for (const cInfo of dockerContainers) {
+                const nets = cInfo.NetworkSettings?.Networks;
+                if (nets && nets[targetNetwork] && nets[targetNetwork].IPAddress) {
+                  usedIps.add(nets[targetNetwork].IPAddress);
+                }
+              }
+              for (const otherEp of endpoints) {
+                if (otherEp.nodeId !== ep.nodeId && config.nodeSubnetMap[otherEp.nodeId] === subnetId) {
+                  const otherIp = config.nodeIpMap?.[otherEp.nodeId];
+                  if (otherIp && otherIp.startsWith(prefix)) {
+                    usedIps.add(otherIp);
+                  }
+                }
+              }
+              for (const ip of assignedIps) {
+                usedIps.add(ip);
+              }
+              let suffix = 2;
+              while (usedIps.has(`${prefix}${suffix}`)) {
+                suffix++;
+              }
+              targetIp = `${prefix}${suffix}`;
+              assignedIps.add(targetIp);
             }
           }
-
-          const targetNetwork = `akal-subnet-${projectId}-${subnetId}`;
           const nodeType = containerInfo.Labels?.['akal.node.type'] || 'ubuntu';
 
           for (const netName of currentNetworks) {
@@ -220,7 +248,10 @@ export class DockerNetworkProvider implements NetworkProvider {
           const isConnected = currentNetworks.includes(targetNetwork);
           const currentIp = inspect.NetworkSettings.Networks[targetNetwork]?.IPAddress;
 
-          if (!isConnected || currentIp !== targetIp) {
+          // If the container is already connected and has a valid subnet IP, skip reconnecting
+          const hasValidSubnetIp = isConnected && currentIp && prefix && currentIp.startsWith(prefix);
+
+          if (!hasValidSubnetIp && (!isConnected || currentIp !== targetIp)) {
             if (isConnected) {
               console.log(`[DockerNetworkProvider] Reconnecting container ${ep.containerName} to ${targetNetwork} due to IP mismatch...`);
               try {
@@ -383,20 +414,20 @@ export class DockerNetworkProvider implements NetworkProvider {
       }
     }
 
-    // Configure firewall for each active container
+    // Configure firewall for each active container in parallel to speed up scaling and deployments
     const isIgwEnabled = config.vpcConfig?.igwEnabled !== false;
-    for (const ep of endpoints) {
+    await Promise.all(endpoints.map(async ep => {
       const containerId = idMap[ep.nodeId];
-      if (!containerId) continue;
+      if (!containerId) return;
 
       const containerInfo = updatedDockerContainers.find(c => c.Id === containerId);
-      if (!containerInfo) continue;
+      if (!containerInfo) return;
 
       // Check if iptables is available inside this container
       const hasIptables = await this.runExec(containerId, ['sh', '-c', 'command -v iptables || true']);
       if (!hasIptables || hasIptables.includes('not found') || hasIptables.trim() === '') {
         console.warn(`[DockerNetworkProvider] Skipping firewall configuration for container ${containerId.slice(0, 12)} (${ep.containerName}): 'iptables' is not installed.`);
-        continue;
+        return;
       }
 
       console.log(`[DockerNetworkProvider] Applying firewall rules inside container ${containerId.slice(0, 12)}...`);
@@ -420,32 +451,108 @@ export class DockerNetworkProvider implements NetworkProvider {
 
       if (nodeType === 'loadbalancer') {
         console.log(`[DockerNetworkProvider] Node ${ep.containerName} is a Load Balancer. Configuring Nginx dynamic proxy...`);
+        
+        // 1. Gather all active ASG instance IPs dynamically from running Docker containers
+        const asgIps: Record<string, string[]> = {};
+        for (const c of updatedDockerContainers) {
+          const asgId = c.Labels?.['akal.asg.id'];
+          if (asgId && c.State === 'running') {
+            const networks = c.NetworkSettings?.Networks || {};
+            const netKey = Object.keys(networks).find(k => k.startsWith('akal-subnet-'));
+            if (netKey && networks[netKey]?.IPAddress) {
+              if (!asgIps[asgId]) asgIps[asgId] = [];
+                  asgIps[asgId].push(networks[netKey].IPAddress);
+            }
+          }
+        }
+
         const targets = config.loadBalancerTargets?.[ep.nodeId] || [];
-        const targetIps = targets.map((tId: string) => ipMap[tId]).filter(Boolean);
+        const targetIps: string[] = [];
+        for (const tId of targets) {
+          const asgConfig = config.asgs?.[tId];
+          const asgContainer = updatedDockerContainers.find(c => c.Id === tId || c.Id.startsWith(tId));
+          const isAsgRunning = asgContainer && asgContainer.State === 'running';
+          
+          if (asgConfig && asgConfig.parentId && isAsgRunning && ipMap[asgConfig.parentId]) {
+            targetIps.push(ipMap[asgConfig.parentId]);
+          } else if (asgIps[tId]) {
+            targetIps.push(...asgIps[tId]);
+          } else if (ipMap[tId]) {
+            targetIps.push(ipMap[tId]);
+          }
+        }
         
         const targetPort = config.loadBalancerTargetPorts?.[ep.nodeId] || 80;
-        let upstreamServers: string;
-        if (targetIps.length > 0) {
-          upstreamServers = targetIps.map((ip: string) => `    server ${ip}:${targetPort};`).join('\n');
+        const rules = config.loadBalancerRoutingRules?.[ep.nodeId] || [];
+        
+        let upstreamsConfig = '';
+        let locationsConfig = '';
+
+        if (rules.length > 0) {
+          rules.forEach((rule: any, idx: number) => {
+            const ruleUpstreamName = `upstream_rule_${idx}`;
+            const ruleTargetId = rule.targetId;
+            const ruleTargetIps: string[] = [];
+            
+            const asgConfig = config.asgs?.[ruleTargetId];
+            const asgContainer = updatedDockerContainers.find(c => c.Id === ruleTargetId || c.Id.startsWith(ruleTargetId));
+            const isAsgRunning = asgContainer && asgContainer.State === 'running';
+
+            if (asgConfig && asgConfig.parentId && isAsgRunning && ipMap[asgConfig.parentId]) {
+              ruleTargetIps.push(ipMap[asgConfig.parentId]);
+            } else if (asgIps[ruleTargetId]) {
+              ruleTargetIps.push(...asgIps[ruleTargetId]);
+            } else if (ipMap[ruleTargetId]) {
+              ruleTargetIps.push(ipMap[ruleTargetId]);
+            }
+
+            let serversStr: string;
+            if (ruleTargetIps.length > 0) {
+              serversStr = ruleTargetIps.map(ip => `    server ${ip}:${targetPort};`).join('\n');
+            } else {
+              serversStr = '    server 127.0.0.1:81 down;';
+            }
+
+            upstreamsConfig += `  upstream ${ruleUpstreamName} {\n${serversStr}\n  }\n`;
+            
+            locationsConfig += `    location ${rule.path} {\n` +
+                               `      proxy_pass http://${ruleUpstreamName}/;\n` +
+                               `      proxy_set_header Host $host;\n` +
+                               `      proxy_set_header X-Real-IP $remote_addr;\n` +
+                               `      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n` +
+                               `      proxy_set_header X-Forwarded-Proto $scheme;\n` +
+                               `    }\n`;
+          });
+
+          // Add default fallback / location routing
+          locationsConfig += `    location / {\n` +
+                             `      return 404 "Akal Lab Load Balancer: No route matched this path.";\n` +
+                             `    }\n`;
         } else {
-          upstreamServers = '    server 127.0.0.1:81 down; # Fallback when no targets are configured';
+          // Fallback to legacy single-target upstream
+          let serversStr: string;
+          if (targetIps.length > 0) {
+            serversStr = targetIps.map(ip => `    server ${ip}:${targetPort};`).join('\n');
+          } else {
+            serversStr = '    server 127.0.0.1:81 down;';
+          }
+          upstreamsConfig = `  upstream myapp {\n${serversStr}\n  }\n`;
+          locationsConfig = `    location / {\n` +
+                            `      proxy_pass http://myapp;\n` +
+                            `      proxy_set_header Host $host;\n` +
+                            `      proxy_set_header X-Real-IP $remote_addr;\n` +
+                            `      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n` +
+                            `      proxy_set_header X-Forwarded-Proto $scheme;\n` +
+                            `    }\n`;
         }
 
         const nginxConfig = `worker_shutdown_timeout 1s;
 events { worker_connections 1024; }
 http {
-  upstream myapp {
-${upstreamServers}
-  }
+${upstreamsConfig}
   server {
     listen 80;
-    location / {
-      proxy_pass http://myapp;
-      proxy_set_header Host $host;
-      proxy_set_header X-Real-IP $remote_addr;
-      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-      proxy_set_header X-Forwarded-Proto $scheme;
-    }
+${locationsConfig}
   }
 }`;
         // Write configuration into container and reload Nginx
@@ -732,7 +839,7 @@ ${upstreamServers}
         console.error(`[DockerNetworkProvider] Verification output:\n${iptablesS}`);
         throw new Error(`Firewall verification failed inside container ${containerId.slice(0, 12)}: custom chains were not created/found.`);
       }
-    }
+    }));
   }
 
   public async cleanupProjectPolicies(projectId: string, endpoints: VirtualEndpoint[]): Promise<void> {

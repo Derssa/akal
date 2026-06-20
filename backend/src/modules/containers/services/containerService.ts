@@ -5,8 +5,8 @@ export class ContainerService {
     return ContainerManager.listContainersByProject(projectId);
   }
 
-  public static async createContainer(projectId: string, name: string, type?: string, isPublic?: boolean): Promise<ContainerInfo> {
-    return ContainerManager.createContainer(projectId, name, type, isPublic);
+  public static async createContainer(projectId: string, name: string, type?: string, isPublic?: boolean, customImage?: string, extraLabels?: Record<string, string>): Promise<ContainerInfo> {
+    return ContainerManager.createContainer(projectId, name, type, isPublic, customImage, extraLabels);
   }
 
   public static async startContainer(id: string): Promise<void> {

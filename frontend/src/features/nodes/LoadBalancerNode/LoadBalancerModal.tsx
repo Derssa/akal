@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { X, GitFork, BookOpen, ListOrdered, ShieldAlert, Cpu, Save } from 'lucide-react';
+import { X, GitFork, BookOpen, ListOrdered, ShieldAlert, Cpu, Save, ArrowRight } from 'lucide-react';
 
 interface TargetNode {
   id: string;
   name: string;
   ip?: string;
   state: string;
+  type?: string;
 }
 
 interface LoadBalancerModalProps {
@@ -18,6 +19,7 @@ interface LoadBalancerModalProps {
     loadBalancerAlgorithm?: 'round_robin' | 'least_conn';
     loadBalancerTargets?: string[];
     loadBalancerTargetPort?: number;
+    loadBalancerRoutingRules?: Array<{ path: string; targetId: string }>;
   };
   allNodes: Array<{
     id: string;
@@ -25,9 +27,15 @@ interface LoadBalancerModalProps {
     name?: string;
     ip?: string;
     state?: string;
+    isAsgInstance?: boolean;
   }>;
   onClose: () => void;
-  onSaveConfig: (algorithm: 'round_robin' | 'least_conn', targets: string[], targetPort: number) => Promise<void>;
+  onSaveConfig: (
+    algorithm: 'round_robin' | 'least_conn',
+    targets: string[],
+    targetPort: number,
+    routingRules: Array<{ path: string; targetId: string }>
+  ) => Promise<void>;
 }
 
 export default function LoadBalancerModal({
@@ -47,16 +55,18 @@ export default function LoadBalancerModal({
   
   // Get initial targets. If config.loadBalancerTargets doesn't exist, default to empty array
   const [selectedTargets, setSelectedTargets] = useState<string[]>(config?.loadBalancerTargets || []);
+  const [routingRules, setRoutingRules] = useState<Array<{ path: string; targetId: string }>>(config?.loadBalancerRoutingRules || []);
   const [saving, setSaving] = useState(false);
 
-  // Filter nodes to only show Ubuntu/web servers (excluding the load balancer itself, nat, database, etc.)
+  // Filter nodes to show Ubuntu servers and Auto Scaling Groups (excluding load balancers, database, nat, and active ASG dynamic replicas)
   const targetNodes: TargetNode[] = allNodes
-    .filter(n => n.id !== containerId && n.type === 'ubuntu')
+    .filter(n => n.id !== containerId && (n.type === 'ubuntu' || n.type === 'autoscalinggroup') && !n.isAsgInstance)
     .map(n => ({
       id: n.id,
       name: n.name || '',
       ip: n.ip,
-      state: n.state || 'stopped'
+      state: n.state || 'stopped',
+      type: n.type
     }));
 
   const handleToggleTarget = (nodeId: string) => {
@@ -67,10 +77,26 @@ export default function LoadBalancerModal({
     );
   };
 
+  const handleAddRule = () => {
+    setRoutingRules(prev => [...prev, { path: `/service-${prev.length + 1}`, targetId: '' }]);
+  };
+
+  const handleRemoveRule = (index: number) => {
+    setRoutingRules(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleRulePathChange = (index: number, path: string) => {
+    setRoutingRules(prev => prev.map((r, idx) => idx === index ? { ...r, path } : r));
+  };
+
+  const handleRuleTargetChange = (index: number, targetId: string) => {
+    setRoutingRules(prev => prev.map((r, idx) => idx === index ? { ...r, targetId } : r));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSaveConfig(algorithm, selectedTargets, targetPort);
+      await onSaveConfig(algorithm, selectedTargets, targetPort, routingRules);
     } catch (err) {
       console.error(err);
     } finally {
@@ -221,6 +247,72 @@ export default function LoadBalancerModal({
                           {node.state === 'running' ? 'Online' : 'Offline'}
                         </span>
                       </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ marginTop: '16px', borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '16px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ ...styles.formLabel, fontWeight: 'bold', margin: 0 }}>Path-Based Routing Rules (ALB Listener):</label>
+                  <button 
+                    onClick={handleAddRule}
+                    style={{
+                      padding: '4px 8px',
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                      color: '#2563EB',
+                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    + Add Rule
+                  </button>
+                </div>
+                {routingRules.length === 0 ? (
+                  <div style={{ ...styles.noNodesMessage, padding: '8px 12px', fontSize: '11px' }}>
+                    No path routing rules configured. Defaults to routing all traffic (/) to all selected targets.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {routingRules.map((rule, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <input
+                          type="text"
+                          value={rule.path}
+                          onChange={(e) => handleRulePathChange(idx, e.target.value)}
+                          placeholder="/path (e.g. /clinic)"
+                          style={{ ...styles.select, flex: 1, padding: '4px 8px', fontSize: '12px' }}
+                        />
+                        <ArrowRight size={14} color="#6B7280" />
+                        <select
+                          value={rule.targetId}
+                          onChange={(e) => handleRuleTargetChange(idx, e.target.value)}
+                          style={{ ...styles.select, flex: 1.5, padding: '4px 8px', fontSize: '12px' }}
+                        >
+                          <option value="">-- Choose Target --</option>
+                          {targetNodes.map(t => (
+                            <option key={t.id} value={t.id}>{t.name} ({t.type === 'autoscalinggroup' ? 'ASG' : 'Server'})</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleRemoveRule(idx)}
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            color: '#EF4444',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}

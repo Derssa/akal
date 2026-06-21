@@ -1,4 +1,4 @@
-import { Play, Square, Trash2, Cpu, Settings } from 'lucide-react';
+import { Play, Square, Trash2, Layers, Settings } from 'lucide-react';
 import styles from '../ServiceNode.module.css';
 
 interface AsgNodeProps {
@@ -44,7 +44,7 @@ export default function AsgNode({ data }: AsgNodeProps) {
     >
       <div className={styles.header}>
         <div className={styles.titleContainer}>
-          <Cpu size={18} color={isRunning ? '#EC4899' : '#6B7280'} />
+          <Layers size={18} color={isRunning ? '#EC4899' : '#6B7280'} />
           <span className={styles.title} style={{ color: '#DB2777' }}>{data.name}</span>
         </div>
 

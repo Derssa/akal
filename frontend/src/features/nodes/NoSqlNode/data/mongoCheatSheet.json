@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Insert Document",
+    "category": "CRUD",
+    "description": "Inserts a single document into a collection.",
+    "example": "db.users.insertOne({ name: \"Alice\", age: 30, roles: [\"admin\"] })"
+  },
+  {
+    "name": "Find Documents",
+    "category": "CRUD",
+    "description": "Queries documents in a collection with filters.",
+    "example": "db.users.find({ age: { $gte: 21 } })"
+  },
+  {
+    "name": "Update Document",
+    "category": "CRUD",
+    "description": "Updates fields of matching documents.",
+    "example": "db.users.updateOne({ name: \"Alice\" }, { $set: { status: \"active\" } })"
+  },
+  {
+    "name": "Delete Document",
+    "category": "CRUD",
+    "description": "Removes matching documents from a collection.",
+    "example": "db.users.deleteOne({ name: \"Alice\" })"
+  },
+  {
+    "name": "Create Index",
+    "category": "Indexing",
+    "description": "Creates an index to optimize query performance.",
+    "example": "db.users.createIndex({ email: 1 }, { unique: true })"
+  },
+  {
+    "name": "Aggregate Pipeline",
+    "category": "Analytics",
+    "description": "Performs multi-stage aggregation operations.",
+    "example": "db.users.aggregate([\n  { $match: { status: \"active\" } },\n  { $group: { _id: \"$age\", count: { $sum: 1 } } }\n])"
+  }
+]

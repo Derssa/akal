@@ -161,26 +161,37 @@ export class ContainerController {
     }
   }
 
-  public static async mysqlExplorer(req: Request, res: Response): Promise<void> {
+  public static async nosqlExplorer(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const explorerData = await ContainerService.getMysqlExplorer(id as string);
+      const explorerData = await ContainerService.getNosqlExplorer(id as string);
       res.json(explorerData);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   }
 
-  public static async mysqlQuery(req: Request, res: Response): Promise<void> {
+  public static async nosqlQuery(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { query, database } = req.body;
+      const { query } = req.body;
       if (!query) {
         res.status(400).json({ error: 'Query is required' });
         return;
       }
-      const result = await ContainerService.executeMysqlQuery(id as string, database || 'mysql', query);
+      const result = await ContainerService.executeNosqlQuery(id as string, query);
       res.json({ result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  public static async scale(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { cpus, memory } = req.body;
+      await ContainerService.scaleContainer(id as string, cpus, memory);
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

@@ -11,8 +11,9 @@ router.post('/:id/stop', ContainerController.stop);
 router.delete('/:id', ContainerController.delete);
 router.get('/:id/postgres/explorer', ContainerController.postgresExplorer);
 router.post('/:id/postgres/query', ContainerController.postgresQuery);
-router.get('/:id/mysql/explorer', ContainerController.mysqlExplorer);
-router.post('/:id/mysql/query', ContainerController.mysqlQuery);
+router.get('/:id/nosql/explorer', ContainerController.nosqlExplorer);
+router.post('/:id/nosql/query', ContainerController.nosqlQuery);
+router.post('/:id/scale', ContainerController.scale);
 
 // ASG Routes
 router.post('/asg/:asgId/deploy', AsgController.deploy);

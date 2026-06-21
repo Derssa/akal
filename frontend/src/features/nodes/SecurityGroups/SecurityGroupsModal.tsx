@@ -230,7 +230,15 @@ export default function SecurityGroupsModal({
                   name="port"
                   type="text"
                   placeholder="e.g. 80, 5432, ALL"
-                  defaultValue={nodeType === 'postgres' ? '5432' : nodeType === 'mysql' ? '3306' : '80'}
+                  defaultValue={
+                    (nodeType === 'postgres' || nodeType === 'sql')
+                      ? '5432'
+                      : nodeType === 'nosql'
+                        ? '27017'
+                        : nodeType === 'mysql'
+                          ? '3306'
+                          : '80'
+                  }
                   style={styles.input}
                 />
               </div>

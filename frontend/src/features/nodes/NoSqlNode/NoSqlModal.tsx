@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Database, Table, Columns, Play, Copy, Check, Search, BookOpen, Terminal, RefreshCw, AlertCircle, Eye, Loader2, Settings, Activity, Server } from 'lucide-react';
 import { API_BASE } from '../../../shared/types';
-import postgresCheatSheet from './data/postgresCheatSheet.json';
+import mongoCheatSheet from './data/mongoCheatSheet.json';
 
-interface PostgresModalProps {
+interface NoSqlModalProps {
   containerId: string;
   nodeName: string;
   projectId: string;
@@ -26,17 +26,16 @@ interface DBNode {
   error?: boolean;
 }
 
-const CHEAT_SHEET_DATA = postgresCheatSheet;
+const CHEAT_SHEET_DATA = mongoCheatSheet;
 
-export default function PostgresModal({ containerId, nodeName, projectId, onClose }: PostgresModalProps) {
+export default function NoSqlModal({ containerId, nodeName, projectId, onClose }: NoSqlModalProps) {
   const [activeTab, setActiveTab] = useState<'details' | 'simulation' | 'explorer' | 'shell' | 'cheatsheet'>('details');
   const [explorerData, setExplorerData] = useState<DBNode[]>([]);
   const [loadingExplorer, setLoadingExplorer] = useState(false);
   const [explorerError, setExplorerError] = useState<string | null>(null);
-  
+
   // Shell states
-  const [selectedDb, setSelectedDb] = useState('postgres');
-  const [sqlQuery, setSqlQuery] = useState('SELECT * FROM pg_tables WHERE schemaname = \'public\';');
+  const [mongoQuery, setMongoQuery] = useState("db.users.insertOne({ name: 'Bob', age: 25, status: 'active' })");
   const [queryOutput, setQueryOutput] = useState('');
   const [executing, setExecuting] = useState(false);
 
@@ -44,19 +43,19 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   const [cheatQuery, setCheatQuery] = useState('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
-  // Database structure expand/collapse maps
-  const [expandedDBs, setExpandedDBs] = useState<Record<string, boolean>>({ postgres: true });
-  const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
+  // DB tree expand state
+  const [expandedDBs, setExpandedDBs] = useState<Record<string, boolean>>({ test: true });
+  const [expandedCollections, setExpandedCollections] = useState<Record<string, boolean>>({});
 
-  // Details & Config vertical limits
+  // Details & Config vertical limits & sharding
   const [cpuLimit, setCpuLimit] = useState(1);
   const [memoryLimit, setMemoryLimit] = useState(512);
   const [storageLimit, setStorageLimit] = useState(50);
   const [appliedCpu, setAppliedCpu] = useState(1);
   const [appliedMemory, setAppliedMemory] = useState(512);
   const [appliedStorage, setAppliedStorage] = useState(50);
+  const [shards, setShards] = useState(2);
   const [replicas, setReplicas] = useState(1);
-  const [partitions, setPartitions] = useState(2);
   const [scalingLoading, setScalingLoading] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(
     "Database operating at baseline resources: 1 vCPU, 512MB RAM, 50GB storage. Handles standard query throughput."
@@ -69,19 +68,20 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Floating query particles
-  const [particles, setParticles] = useState<Array<{ id: string; target: 'primary' | 'replica'; index?: number; isWrite: boolean; isReplicationCopy?: boolean }>>([]);
+  const [particles, setParticles] = useState<Array<{ id: string; target: number; isWrite: boolean; isReplicaCopy?: boolean; replicaIndex?: number; isStale?: boolean }>>([]);
 
   // Active highlighted target node for simulation flash
   const [activeHighlightNode, setActiveHighlightNode] = useState<string | null>(null);
 
   // Simulation tab states
-  const [isPrimaryCrashed, setIsPrimaryCrashed] = useState(false);
-  const [simLogs, setSimLogs] = useState<Array<{ id: string; type: 'read' | 'write' | 'sys' | 'err'; msg: string; time: string }>>([
-    { id: '1', type: 'sys', msg: 'Primary Database initialized.', time: new Date().toLocaleTimeString() }
-  ]);
-  const [simMetrics, setSimMetrics] = useState({ reads: 0, writes: 0, errors: 0 });
   const [trafficActive, setTrafficActive] = useState(false);
-  const [lastPartitionTarget, setLastPartitionTarget] = useState<number>(-1);
+  const [simLogs, setSimLogs] = useState<Array<{ id: string; type: 'route' | 'warn' | 'sys'; msg: string; time: string }>>([
+    { id: '1', type: 'sys', msg: 'MongoDB Router (mongos) online. Shard servers active.', time: new Date().toLocaleTimeString() }
+  ]);
+  const [simMetrics, setSimMetrics] = useState({ routed: 0, staleReads: 0 });
+  const [lastHashedKey, setLastHashedKey] = useState<string>('');
+  const [lastShardIndex, setLastShardIndex] = useState<number>(-1);
+  const [crashedShards, setCrashedShards] = useState<Record<number, boolean>>({});
 
   const fetchExplorerDataRef = useRef<() => Promise<void>>(undefined);
 
@@ -89,7 +89,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
     try {
       setLoadingExplorer(true);
       setExplorerError(null);
-      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/postgres/explorer`);
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/nosql/explorer`);
       if (res.ok) {
         const data = await res.json();
         setExplorerData(data);
@@ -97,7 +97,6 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
         const errData = await res.json();
         if (errData.error && errData.error.includes('starting up')) {
           setExplorerError('starting_up');
-          // Auto retry in 2.5 seconds
           setTimeout(() => {
             fetchExplorerDataRef.current?.();
           }, 2500);
@@ -116,24 +115,32 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   useEffect(() => {
     fetchExplorerDataRef.current = fetchExplorerData;
   }, [fetchExplorerData]);
+
   useEffect(() => {
     fetchExplorerData();
   }, [fetchExplorerData]);
 
-  // Automatic Replica promotion upon Primary database crash
+  // Automatic replica promotion (election) upon Shard Primary crash
   useEffect(() => {
-    if (isPrimaryCrashed && replicas > 0) {
+    const crashedShardIndexStr = Object.keys(crashedShards).find(k => crashedShards[Number(k)] && replicas > 0);
+    if (crashedShardIndexStr !== undefined) {
+      const shardIdx = Number(crashedShardIndexStr);
       const timer = setTimeout(() => {
-        setIsPrimaryCrashed(false);
-        setReplicas(prev => Math.max(0, prev - 1));
+        setCrashedShards(prev => ({ ...prev, [shardIdx]: false }));
         setSimLogs(prev => [
-          { id: Math.random().toString(), type: 'sys', msg: 'AUTOMATIC FAILOVER: Replica pool detected primary outage. Automatically elected Replica #1 to Primary. Primary database online.', time: new Date().toLocaleTimeString() },
+          { 
+            id: Math.random().toString(), 
+            type: 'sys', 
+            msg: `REPLICA ELECTION: Shard #${shardIdx + 1} Replica Set detected Primary outage. Automatically elected Secondary to Primary. Shard operations restored.`, 
+            time: new Date().toLocaleTimeString() 
+          },
           ...prev
         ]);
-      }, 3500); // Failover duration 3.5 seconds
+      }, 3500); // Election delay 3.5 seconds
       return () => clearTimeout(timer);
     }
-  }, [isPrimaryCrashed, replicas]);
+  }, [crashedShards, replicas]);
+
 
   // Interactive zoom & pan helper handlers
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -155,125 +162,183 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
     setZoomScale(prev => Math.max(0.5, Math.min(2.0, prev + scaleChange)));
   };
 
-  // Traffic simulation engine
+  // Traffic simulation (sharding hash routing + eventual consistency)
   useEffect(() => {
     if (!trafficActive || activeTab !== 'simulation') return;
 
     const interval = setInterval(() => {
-      const isWrite = Math.random() > 0.55;
+      const isWrite = Math.random() > 0.4;
       const timeStr = new Date().toLocaleTimeString();
       const logId = Math.random().toString(36).substr(2, 9);
+      const randomDocId = Math.random().toString(36).substring(3, 11);
       const particleId = Math.random().toString(36).substr(2, 9);
 
+      // Simple hash helper
+      let hash = 0;
+      for (let i = 0; i < randomDocId.length; i++) {
+        hash = randomDocId.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const targetShard = Math.abs(hash) % shards;
+
       if (isWrite) {
-        if (isPrimaryCrashed) {
+        setLastHashedKey(randomDocId);
+        setLastShardIndex(targetShard);
+        
+        if (crashedShards[targetShard]) {
           setSimLogs(prev => [
-            { id: logId, type: 'err', msg: 'WRITE FAILED: Primary database instance is crashed/unreachable.', time: timeStr },
+            { id: logId, type: 'warn', msg: `WRITE FAILED: Shard Primary #${targetShard + 1} is crashed/unreachable. Query router timed out.`, time: timeStr },
             ...prev.slice(0, 19)
           ]);
-          setSimMetrics(prev => ({ ...prev, errors: prev.errors + 1 }));
-          
-          // Spawn failed write particle
-          setParticles(prev => [...prev, { id: particleId, target: 'primary', isWrite: true }]);
-          setActiveHighlightNode('primary');
-          setTimeout(() => {
-            setParticles(prev => prev.filter(p => p.id !== particleId));
-            setActiveHighlightNode(null);
-          }, 800);
+          setParticles(prev => [...prev, { id: particleId, target: targetShard, isWrite: true }]);
+          setActiveHighlightNode(`shard-primary-${targetShard}`);
         } else {
-          const insertId = Math.floor(Math.random() * 1000);
-          const targetPartition = insertId % partitions;
-          setLastPartitionTarget(targetPartition);
           setSimLogs(prev => [
-            { id: logId, type: 'write', msg: `WRITE SUCCESS: INSERT INTO users VALUES(${insertId}) -> Routed to Primary (10.0.1.2) -> Partition [users_p${targetPartition}]`, time: timeStr },
+            { id: logId, type: 'route', msg: `WRITE: Document ID [${randomDocId}] ➔ hash ➔ Routed to Shard Primary #${targetShard + 1} (Partition ${targetShard})`, time: timeStr },
             ...prev.slice(0, 19)
           ]);
-          setSimMetrics(prev => ({ ...prev, writes: prev.writes + 1 }));
+          setSimMetrics(prev => ({ ...prev, routed: prev.routed + 1 }));
 
-          // Spawn successful write particle
-          setParticles(prev => [...prev, { id: particleId, target: 'primary', isWrite: true }]);
-          setActiveHighlightNode('primary');
+          // Spawn write particle to Shard Primary
+          setParticles(prev => [...prev, { id: particleId, target: targetShard, isWrite: true }]);
+          setActiveHighlightNode(`shard-primary-${targetShard}`);
 
-          // Trigger replicas update replication flow
+          // Replicating to replica members (visual secondary particles)
           if (replicas > 0) {
             setTimeout(() => {
               const repParticleIds: string[] = [];
               for (let r = 0; r < replicas; r++) {
                 const repParticleId = Math.random().toString(36).substr(2, 9);
                 repParticleIds.push(repParticleId);
-                setParticles(prev => [...prev, { id: repParticleId, target: 'replica', index: r, isWrite: true, isReplicationCopy: true }]);
+                setParticles(prev => [...prev, { id: repParticleId, target: targetShard, isWrite: true, isReplicaCopy: true, replicaIndex: r }]);
               }
-              // Clean up replication particles after 800ms
+              // Clean up replica replication particles after 800ms
               setTimeout(() => {
                 setParticles(prev => prev.filter(p => !repParticleIds.includes(p.id)));
               }, 800);
             }, 400);
           }
+        }
 
+        setTimeout(() => {
+          setParticles(prev => prev.filter(p => p.id !== particleId));
+          setActiveHighlightNode(null);
+        }, 800);
+      } else {
+        // Read: demonstrate eventual consistency stale reads occasionally
+        const isStale = replicas > 0 && Math.random() > 0.8;
+        if (crashedShards[targetShard]) {
+          if (replicas > 0) {
+            // Can read from replica
+            const targetReplica = Math.floor(Math.random() * replicas);
+            setSimLogs(prev => [
+              { id: logId, type: 'route', msg: `READ SUCCESS: Primary Shard #${targetShard + 1} offline. Router retrieved data from secondary Replica #${targetReplica + 1}.`, time: timeStr },
+              ...prev.slice(0, 19)
+            ]);
+            setSimMetrics(prev => ({ ...prev, routed: prev.routed + 1 }));
+            setParticles(prev => [...prev, { id: particleId, target: targetShard, isWrite: false, replicaIndex: targetReplica }]);
+            setActiveHighlightNode(`shard-replica-${targetShard}-${targetReplica}`);
+          } else {
+            setSimLogs(prev => [
+              { id: logId, type: 'warn', msg: `READ FAILED: Shard #${targetShard + 1} is offline and has no replicas available.`, time: timeStr },
+              ...prev.slice(0, 19)
+            ]);
+            setParticles(prev => [...prev, { id: particleId, target: targetShard, isWrite: false }]);
+            setActiveHighlightNode(`shard-primary-${targetShard}`);
+          }
           setTimeout(() => {
             setParticles(prev => prev.filter(p => p.id !== particleId));
             setActiveHighlightNode(null);
           }, 800);
-        }
-      } else {
-        // Read
-        if (replicas > 0) {
-          const targetReplica = Math.floor(Math.random() * replicas) + 1;
-          const readId = Math.floor(Math.random() * 1000);
-          const sourcePartition = readId % partitions;
-          setLastPartitionTarget(sourcePartition);
+        } else if (isStale) {
+          const targetReplica = Math.floor(Math.random() * replicas);
           setSimLogs(prev => [
-            { id: logId, type: 'read', msg: `READ SUCCESS: SELECT * FROM users_p${sourcePartition} -> Load balanced to Replica #${targetReplica} (10.0.1.${2 + targetReplica})`, time: timeStr },
+            { id: logId, type: 'warn', msg: `READ WARNING: Read query for [${randomDocId}] routed to Shard #${targetShard + 1} Replica #${targetReplica + 1} returned stale secondary state (Eventual Consistency lag).`, time: timeStr },
             ...prev.slice(0, 19)
           ]);
-          setSimMetrics(prev => ({ ...prev, reads: prev.reads + 1 }));
+          setSimMetrics(prev => ({ ...prev, staleReads: prev.staleReads + 1 }));
 
-          // Spawn replica read particle
-          setParticles(prev => [...prev, { id: particleId, target: 'replica', index: targetReplica - 1, isWrite: false }]);
-          setActiveHighlightNode(`replica-${targetReplica - 1}`);
+          setParticles(prev => [...prev, { id: particleId, target: targetShard, isWrite: false, isStale: true, replicaIndex: targetReplica }]);
+          setActiveHighlightNode(`shard-replica-${targetShard}-${targetReplica}`);
+
           setTimeout(() => {
             setParticles(prev => prev.filter(p => p.id !== particleId));
             setActiveHighlightNode(null);
           }, 800);
         } else {
-          if (isPrimaryCrashed) {
+          // Normal Read (can go to primary or replica if replicas > 0)
+          const useReplica = replicas > 0 && Math.random() > 0.5;
+          if (useReplica) {
+            const targetReplica = Math.floor(Math.random() * replicas);
             setSimLogs(prev => [
-              { id: logId, type: 'err', msg: 'READ FAILED: No active replicas, and primary database instance is crashed.', time: timeStr },
+              { id: logId, type: 'sys', msg: `READ: Query for ID [${randomDocId}] ➔ Router directed to Shard #${targetShard + 1} Replica #${targetReplica + 1}`, time: timeStr },
               ...prev.slice(0, 19)
             ]);
-            setSimMetrics(prev => ({ ...prev, errors: prev.errors + 1 }));
+            setSimMetrics(prev => ({ ...prev, routed: prev.routed + 1 }));
 
-            // Spawn failed read particle
-            setParticles(prev => [...prev, { id: particleId, target: 'primary', isWrite: false }]);
-            setActiveHighlightNode('primary');
-            setTimeout(() => {
-              setParticles(prev => prev.filter(p => p.id !== particleId));
-              setActiveHighlightNode(null);
-            }, 800);
+            setParticles(prev => [...prev, { id: particleId, target: targetShard, isWrite: false, replicaIndex: targetReplica }]);
+            setActiveHighlightNode(`shard-replica-${targetShard}-${targetReplica}`);
           } else {
-            const readId = Math.floor(Math.random() * 1000);
-            const sourcePartition = readId % partitions;
-            setLastPartitionTarget(sourcePartition);
             setSimLogs(prev => [
-              { id: logId, type: 'read', msg: `READ SUCCESS: SELECT * FROM users_p${sourcePartition} -> Routed to Primary (10.0.1.2) [No Replicas Defined]`, time: timeStr },
+              { id: logId, type: 'sys', msg: `READ: Query for ID [${randomDocId}] ➔ Router directed to Shard Primary #${targetShard + 1}`, time: timeStr },
               ...prev.slice(0, 19)
             ]);
-            setSimMetrics(prev => ({ ...prev, reads: prev.reads + 1 }));
+            setSimMetrics(prev => ({ ...prev, routed: prev.routed + 1 }));
 
-            // Spawn primary read particle
-            setParticles(prev => [...prev, { id: particleId, target: 'primary', isWrite: false }]);
-            setActiveHighlightNode('primary');
-            setTimeout(() => {
-              setParticles(prev => prev.filter(p => p.id !== particleId));
-              setActiveHighlightNode(null);
-            }, 800);
+            setParticles(prev => [...prev, { id: particleId, target: targetShard, isWrite: false }]);
+            setActiveHighlightNode(`shard-primary-${targetShard}`);
           }
+
+          setTimeout(() => {
+            setParticles(prev => prev.filter(p => p.id !== particleId));
+            setActiveHighlightNode(null);
+          }, 800);
         }
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [trafficActive, isPrimaryCrashed, replicas, partitions, activeTab]);
+  }, [trafficActive, shards, replicas, activeTab]);
+
+  const getShardsStyles = () => {
+    let styleStr = '';
+    for (let i = 0; i < shards; i++) {
+      const topPercent = shards === 1 ? 50 : 15 + (i * 70) / (shards - 1);
+      
+      // Animation from mongos (left: 10%) to shard primary (left: 45%)
+      styleStr += `
+        @keyframes flowToShardPrimary${i} {
+          0% { left: 15%; top: 50%; opacity: 1; }
+          100% { left: 45%; top: ${topPercent}%; opacity: 0.8; }
+        }
+        @keyframes readFlowToShardPrimary${i} {
+          0% { left: 15%; top: 50%; opacity: 1; }
+          45% { left: 45%; top: ${topPercent}%; opacity: 0.9; }
+          55% { left: 45%; top: ${topPercent}%; opacity: 0.9; }
+          100% { left: 15%; top: 50%; opacity: 1; }
+        }
+      `;
+
+      // Animations for replica read round-trip and replication copy flow
+      for (let r = 0; r < 3; r++) {
+        const repOffset = (r - (replicas - 1) / 2) * 12;
+        const repTopPercent = topPercent + (replicas > 1 ? repOffset : 0);
+        
+        styleStr += `
+          @keyframes readFlowToShardReplica${i}_${r} {
+            0% { left: 15%; top: 50%; opacity: 1; }
+            45% { left: 78%; top: ${repTopPercent}%; opacity: 0.9; }
+            55% { left: 78%; top: ${repTopPercent}%; opacity: 0.9; }
+            100% { left: 15%; top: 50%; opacity: 1; }
+          }
+          @keyframes replicationToShardReplica${i}_${r} {
+            0% { left: 45%; top: ${topPercent}%; opacity: 1; }
+            100% { left: 78%; top: ${repTopPercent}%; opacity: 0.8; }
+          }
+        `;
+      }
+    }
+    return styleStr;
+  };
 
   const handleUpdateLimits = async () => {
     setScalingLoading(true);
@@ -326,66 +391,18 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   };
 
   const handleExecuteQuery = async () => {
-    let targetDb = selectedDb;
-    let queryToRun = sqlQuery;
-    let localConsoleOutput = '';
-
-    const connectRegex = /^\s*\\(?:c|connect)\s+([a-zA-Z0-9_"\-]+)/m;
-    const match = sqlQuery.match(connectRegex);
-    if (match) {
-      const dbName = match[1].replace(/"/g, '');
-      targetDb = dbName;
-      setSelectedDb(dbName);
-      queryToRun = sqlQuery.replace(connectRegex, '').trim();
-      localConsoleOutput = `Switched database connection context to "${dbName}".\n`;
-    }
-
-    if (!queryToRun) {
-      setQueryOutput(`${localConsoleOutput}No SQL statements left to run.`);
-      fetchExplorerData();
-      return;
-    }
-
     try {
       setExecuting(true);
-      setQueryOutput(localConsoleOutput + 'Executing query in container...');
-      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/postgres/query`, {
+      setQueryOutput('Evaluating mongosh expression...');
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/nosql/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: queryToRun, database: targetDb })
+        body: JSON.stringify({ query: mongoQuery })
       });
       const data = await res.json();
       if (res.ok) {
-        setQueryOutput(localConsoleOutput + (data.result || 'Query executed successfully with no output.'));
+        setQueryOutput(data.result || 'Executed successfully.');
         fetchExplorerData();
-      } else {
-        setQueryOutput(localConsoleOutput + `ERROR: ${data.error}`);
-      }
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      setQueryOutput(localConsoleOutput + `Execution failed: ${errMsg}`);
-    } finally {
-      setExecuting(false);
-    }
-  };
-
-  const handleViewTableData = async (database: string, tableName: string) => {
-    setSelectedDb(database);
-    const query = `SELECT * FROM ${tableName} LIMIT 100;`;
-    setSqlQuery(query);
-    setActiveTab('shell');
-
-    try {
-      setExecuting(true);
-      setQueryOutput('Executing query in container...');
-      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/postgres/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, database })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setQueryOutput(data.result || 'Query executed successfully with no output.');
       } else {
         setQueryOutput(`ERROR: ${data.error}`);
       }
@@ -397,18 +414,37 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
     }
   };
 
+  const handleViewCollectionData = async (database: string, collName: string) => {
+    const query = `JSON.stringify(db.getSiblingDB('${database}').getCollection('${collName}').find().limit(10).toArray(), null, 2)`;
+    setMongoQuery(query);
+    setActiveTab('shell');
+
+    try {
+      setExecuting(true);
+      setQueryOutput('Retrieving collection documents...');
+      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/nosql/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setQueryOutput(data.result || 'No documents.');
+      } else {
+        setQueryOutput(`ERROR: ${data.error}`);
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setQueryOutput(`Error: ${errMsg}`);
+    } finally {
+      setExecuting(false);
+    }
+  };
+
   const handleCopyCheat = (code: string, idx: number) => {
     navigator.clipboard.writeText(code);
     setCopiedIndex(idx);
     setTimeout(() => setCopiedIndex(null), 2000);
-  };
-
-  const toggleDBExpand = (db: string) => {
-    setExpandedDBs(prev => ({ ...prev, [db]: !prev[db] }));
-  };
-
-  const toggleTableExpand = (tblKey: string) => {
-    setExpandedTables(prev => ({ ...prev, [tblKey]: !prev[tblKey] }));
   };
 
   const filteredCheatSheet = CHEAT_SHEET_DATA.filter(item => {
@@ -419,99 +455,6 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
       item.category.toLowerCase().includes(query)
     );
   });
-
-  const getReplicasStyles = () => {
-    let styleStr = '';
-    // Write request flow from client to primary
-    styleStr += `
-      @keyframes flowToPrimary {
-        0% { left: 15%; top: 50%; opacity: 1; }
-        100% { left: 45%; top: 50%; opacity: 0.8; }
-      }
-    `;
-
-    // Read request round-trip flow (client -> primary -> client)
-    styleStr += `
-      @keyframes readFlowToPrimary {
-        0% { left: 15%; top: 50%; opacity: 1; }
-        45% { left: 45%; top: 50%; opacity: 0.9; }
-        55% { left: 45%; top: 50%; opacity: 0.9; }
-        100% { left: 15%; top: 50%; opacity: 1; }
-      }
-    `;
-
-    if (replicas === 1) {
-      styleStr += `
-        @keyframes readFlowToReplica0 {
-          0% { left: 15%; top: 50%; opacity: 1; }
-          45% { left: 78%; top: 50%; opacity: 0.9; }
-          55% { left: 78%; top: 50%; opacity: 0.9; }
-          100% { left: 15%; top: 50%; opacity: 1; }
-        }
-        @keyframes replicationToReplica0 {
-          0% { left: 45%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 50%; opacity: 0.8; }
-        }
-      `;
-    } else if (replicas === 2) {
-      styleStr += `
-        @keyframes readFlowToReplica0 {
-          0% { left: 15%; top: 50%; opacity: 1; }
-          45% { left: 78%; top: 35%; opacity: 0.9; }
-          55% { left: 78%; top: 35%; opacity: 0.9; }
-          100% { left: 15%; top: 50%; opacity: 1; }
-        }
-        @keyframes readFlowToReplica1 {
-          0% { left: 15%; top: 50%; opacity: 1; }
-          45% { left: 78%; top: 65%; opacity: 0.9; }
-          55% { left: 78%; top: 65%; opacity: 0.9; }
-          100% { left: 15%; top: 50%; opacity: 1; }
-        }
-        @keyframes replicationToReplica0 {
-          0% { left: 45%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 35%; opacity: 0.8; }
-        }
-        @keyframes replicationToReplica1 {
-          0% { left: 45%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 65%; opacity: 0.8; }
-        }
-      `;
-    } else if (replicas === 3) {
-      styleStr += `
-        @keyframes readFlowToReplica0 {
-          0% { left: 15%; top: 50%; opacity: 1; }
-          45% { left: 78%; top: 20%; opacity: 0.9; }
-          55% { left: 78%; top: 20%; opacity: 0.9; }
-          100% { left: 15%; top: 50%; opacity: 1; }
-        }
-        @keyframes readFlowToReplica1 {
-          0% { left: 15%; top: 50%; opacity: 1; }
-          45% { left: 78%; top: 50%; opacity: 0.9; }
-          55% { left: 78%; top: 50%; opacity: 0.9; }
-          100% { left: 15%; top: 50%; opacity: 1; }
-        }
-        @keyframes readFlowToReplica2 {
-          0% { left: 15%; top: 50%; opacity: 1; }
-          45% { left: 78%; top: 80%; opacity: 0.9; }
-          55% { left: 78%; top: 80%; opacity: 0.9; }
-          100% { left: 15%; top: 50%; opacity: 1; }
-        }
-        @keyframes replicationToReplica0 {
-          0% { left: 45%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 20%; opacity: 0.8; }
-        }
-        @keyframes replicationToReplica1 {
-          0% { left: 45%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 50%; opacity: 0.8; }
-        }
-        @keyframes replicationToReplica2 {
-          0% { left: 45%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 80%; opacity: 0.8; }
-        }
-      `;
-    }
-    return styleStr;
-  };
 
   return (
     <div style={styles.overlay}>
@@ -538,21 +481,21 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
               onClick={() => setActiveTab('explorer')}
             >
               <Database size={15} style={{ marginRight: 6 }} />
-              Database Explorer
+              NoSQL Explorer
             </button>
             <button
               style={{ ...styles.tabBtn, ...(activeTab === 'shell' ? styles.activeTabBtn : {}) }}
               onClick={() => setActiveTab('shell')}
             >
               <Terminal size={15} style={{ marginRight: 6 }} />
-              SQL Shell
+              Mongo Shell
             </button>
             <button
               style={{ ...styles.tabBtn, ...(activeTab === 'cheatsheet' ? styles.activeTabBtn : {}) }}
               onClick={() => setActiveTab('cheatsheet')}
             >
               <BookOpen size={15} style={{ marginRight: 6 }} />
-              SQL Cheat Sheet
+              Mongo Cheat Sheet
             </button>
           </div>
           <button onClick={onClose} style={styles.closeBtn}>
@@ -565,14 +508,14 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
           {/* TAB: Details & Config */}
           {activeTab === 'details' && (
             <div style={styles.tabContent}>
-              <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#1E293B' }}>Database Scaling & Parameters</h3>
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', color: '#1E293B' }}>NoSQL Database Configuration</h3>
               <p style={{ margin: '0 0 20px 0', fontSize: '13px', color: '#64748B' }}>
-                Configure vertical container limits and horizontal database replication parameters.
+                Manage vertical resources and partition horizontal database shards.
               </p>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px' }}>
-                  <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#334155' }}>Vertical Resource Controls</h4>
+                  <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#334155' }}>Vertical Limits</h4>
                   
                   <div style={{ marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
@@ -592,7 +535,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
 
                   <div style={{ marginBottom: '20px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: 600 }}>RAM Limit</span>
+                      <span style={{ fontSize: '12px', fontWeight: 600 }}>Memory Limit</span>
                       <span style={{ fontSize: '12px', color: '#2563EB', fontWeight: 'bold' }}>{memoryLimit} MB</span>
                     </div>
                     <input
@@ -656,13 +599,34 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                   )}
                 </div>
 
-                 <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px' }}>
-                  <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#334155' }}>Horizontal Scaling & Partitioning</h4>
+                <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px' }}>
+                  <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#334155' }}>Horizontal Scaling & Replication</h4>
                   
                   <div style={{ marginBottom: '16px', display: 'flex', gap: '24px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                        Replica Pool Size
+                        Shard Partitions
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button
+                          onClick={() => setShards(prev => Math.max(1, prev - 1))}
+                          style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                          -
+                        </button>
+                        <span style={{ fontSize: '16px', fontWeight: 'bold', width: '20px', textAlign: 'center' }}>{shards}</span>
+                        <button
+                          onClick={() => setShards(prev => Math.min(5, prev + 1))}
+                          style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
+                        Replica Members
                       </label>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <button
@@ -680,37 +644,16 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                         </button>
                       </div>
                     </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                        Table Partitions
-                      </label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <button
-                          onClick={() => setPartitions(prev => Math.max(1, prev - 1))}
-                          style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
-                        >
-                          -
-                        </button>
-                        <span style={{ fontSize: '16px', fontWeight: 'bold', width: '20px', textAlign: 'center' }}>{partitions}</span>
-                        <button
-                          onClick={() => setPartitions(prev => Math.min(5, prev + 1))}
-                          style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
                   </div>
 
                   <span style={{ fontSize: '11px', color: '#64748B', display: 'block', marginBottom: '12px' }}>
-                    Replicas scale reads. Partitions divide large datasets (e.g. users) horizontally into sub-tables (p0 to p4) for optimized search performance.
+                    Shards partition collections horizontally using hash keys. Replicas provide high availability and read scalability for each shard partition.
                   </span>
 
                   <div style={{ backgroundColor: '#F8FAFC', borderRadius: '6px', padding: '12px', borderLeft: '3px solid #2563EB' }}>
-                    <h5 style={{ margin: '0 0 4px 0', fontSize: '11px', textTransform: 'uppercase', color: '#475569' }}>Topology Note</h5>
+                    <h5 style={{ margin: '0 0 4px 0', fontSize: '11px', textTransform: 'uppercase', color: '#475569' }}>Architecture Note</h5>
                     <span style={{ fontSize: '11px', color: '#64748B' }}>
-                      Replication uses log-shipping. Replicas act as read-only copies. Primary failures stop writes, but read queries remain available on active replicas.
+                      MongoDB sharding uses mongos as the query router. Each shard can be a replica set. Replicas synchronize data asynchronously via oplog tailing.
                     </span>
                   </div>
                 </div>
@@ -723,9 +666,9 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
             <div style={{ ...styles.tabContent, display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', color: '#1E293B' }}>Database Traffic & Failover Dashboard</h3>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', color: '#1E293B' }}>MongoDB Sharding Router Simulation</h3>
                   <p style={{ margin: 0, fontSize: '12px', color: '#64748B' }}>
-                    Generate traffic and test database high-availability scenarios.
+                    Observe request hashing and eventual consistency secondary replication lag.
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -746,22 +689,23 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                   </button>
                   <button
                     onClick={() => {
-                      if (isPrimaryCrashed) {
-                        setIsPrimaryCrashed(false);
-                        setSimLogs(prev => [
-                          { id: Math.random().toString(), type: 'sys', msg: 'Failover/Recovery: Primary Postgres Server recovered and is ONLINE.', time: new Date().toLocaleTimeString() },
-                          ...prev
-                        ]);
-                      } else {
-                        setIsPrimaryCrashed(true);
-                        setSimLogs(prev => [
-                          { id: Math.random().toString(), type: 'err', msg: 'FAILOVER EVENT: Primary Postgres container CRASHED (Offline).', time: new Date().toLocaleTimeString() },
-                          ...prev
-                        ]);
-                      }
+                      const activeTarget = lastShardIndex >= 0 ? lastShardIndex : 0;
+                      const isCurrentlyCrashed = !!crashedShards[activeTarget];
+                      setCrashedShards(prev => ({ ...prev, [activeTarget]: !isCurrentlyCrashed }));
+                      setSimLogs(prev => [
+                        {
+                          id: Math.random().toString(),
+                          type: isCurrentlyCrashed ? 'sys' : 'warn',
+                          msg: isCurrentlyCrashed
+                            ? `RECOVERY: Shard Primary #${activeTarget + 1} recovered and is ONLINE.`
+                            : `CRASH EVENT: Shard Primary #${activeTarget + 1} crashed (Offline).`,
+                          time: new Date().toLocaleTimeString()
+                        },
+                        ...prev
+                      ]);
                     }}
                     style={{
-                      backgroundColor: isPrimaryCrashed ? '#10B981' : '#EF4444',
+                      backgroundColor: crashedShards[lastShardIndex >= 0 ? lastShardIndex : 0] ? '#10B981' : '#EF4444',
                       color: 'white',
                       border: 'none',
                       padding: '6px 12px',
@@ -771,48 +715,20 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                       fontSize: '12px'
                     }}
                   >
-                    {isPrimaryCrashed ? 'Recover Primary' : 'Crash Primary'}
+                    {crashedShards[lastShardIndex >= 0 ? lastShardIndex : 0] ? 'Recover Shard' : 'Crash Shard'}
                   </button>
-                  {isPrimaryCrashed && replicas > 0 && (
-                    <button
-                      onClick={() => {
-                        setIsPrimaryCrashed(false);
-                        setReplicas(prev => prev - 1);
-                        setSimLogs(prev => [
-                          { id: Math.random().toString(), type: 'sys', msg: 'FAILOVER COMPLETED: Replica promoted to Primary. Writes restored.', time: new Date().toLocaleTimeString() },
-                          ...prev
-                        ]);
-                      }}
-                      style={{
-                        backgroundColor: '#3B82F6',
-                        color: 'white',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '6px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
-                    >
-                      Promote Replica
-                    </button>
-                  )}
                 </div>
               </div>
 
               {/* Simulation metrics */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                  <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748B', fontWeight: 600 }}>Reads Handled</span>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2563EB', marginTop: '4px' }}>{simMetrics.reads}</div>
+                  <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748B', fontWeight: 600 }}>Routed Queries</span>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#2563EB', marginTop: '4px' }}>{simMetrics.routed}</div>
                 </div>
-                <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px', textAlign: 'center', backgroundColor: '#F8FAFC' }}>
-                  <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#64748B', fontWeight: 600 }}>Writes Handled</span>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#10B981', marginTop: '4px' }}>{simMetrics.writes}</div>
-                </div>
-                <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px', textAlign: 'center', backgroundColor: '#FEE2E2' }}>
-                  <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#991B1B', fontWeight: 600 }}>Errors / Failures</span>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#EF4444', marginTop: '4px' }}>{simMetrics.errors}</div>
+                <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '12px', textAlign: 'center', backgroundColor: '#FEF3C7' }}>
+                  <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#B45309', fontWeight: 600 }}>Stale Reads Logged</span>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#D97706', marginTop: '4px' }}>{simMetrics.staleReads}</div>
                 </div>
               </div>
 
@@ -839,7 +755,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                   0% { width: 40px; height: 40px; opacity: 0.8; }
                   100% { width: 80px; height: 80px; opacity: 0; }
                 }
-                ${getReplicasStyles()}
+                ${getShardsStyles()}
               `}} />
 
               {/* Topology Map Wrapper (Zoom/Pan Container) */}
@@ -885,6 +801,25 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                   Reset View (Zoom: {Math.round(zoomScale * 100)}%)
                 </button>
 
+                {/* Hashing key status overlay */}
+                {lastHashedKey && (
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: '10px', 
+                    right: '10px', 
+                    backgroundColor: 'rgba(59, 130, 246, 0.15)', 
+                    border: '1px solid rgba(59, 130, 246, 0.3)', 
+                    borderRadius: '6px', 
+                    padding: '4px 10px', 
+                    fontSize: '11px', 
+                    color: '#93C5FD', 
+                    fontFamily: 'monospace',
+                    zIndex: 30
+                  }}>
+                    Key: "{lastHashedKey}" ➔ MD5 ➔ Shard {lastShardIndex + 1}
+                  </div>
+                )}
+
                 {/* Inner Viewport applying Zoom & Pan */}
                 <div style={{
                   width: '100%',
@@ -898,37 +833,42 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                 }}>
                   {/* SVG Connection Paths */}
                   <svg style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }}>
-                    {/* Path to primary */}
-                    <line x1="12%" y1="50%" x2="42%" y2="50%" stroke="rgba(255,255,255,0.12)" strokeWidth="2" strokeDasharray="5,5" />
-                    {/* Paths to replicas */}
-                    {replicas > 0 && Array.from({ length: replicas }).map((_, i) => {
-                      let repTop = '50%';
-                      if (replicas === 2) repTop = i === 0 ? '35%' : '65%';
-                      else if (replicas === 3) repTop = i === 0 ? '20%' : i === 1 ? '50%' : '80%';
+                    {/* Path from mongos to each Shard Primary */}
+                    {Array.from({ length: shards }).map((_, i) => {
+                      const topPercent = shards === 1 ? 50 : 15 + (i * 70) / (shards - 1);
                       return (
-                        <line key={i} x1="12%" y1="50%" x2="78%" y2={repTop} stroke="rgba(255,255,255,0.12)" strokeWidth="2" strokeDasharray="5,5" />
+                        <g key={i}>
+                          <line x1="12%" y1="50%" x2="42%" y2={`${topPercent}%`} stroke="rgba(255,255,255,0.12)" strokeWidth="2" strokeDasharray="5,5" />
+                          {/* Paths from Shard Primary to its Replicas */}
+                          {replicas > 0 && Array.from({ length: replicas }).map((_, r) => {
+                            const repOffset = (r - (replicas - 1) / 2) * 12;
+                            const repTopPercent = topPercent + (replicas > 1 ? repOffset : 0);
+                            return (
+                              <line key={r} x1="42%" y1={`${topPercent}%`} x2="78%" y2={`${repTopPercent}%`} stroke="rgba(255,255,255,0.08)" strokeWidth="1.5" strokeDasharray="3,3" />
+                            );
+                          })}
+                        </g>
                       );
                     })}
                   </svg>
 
-                  {/* Client source */}
+                  {/* mongos Router */}
                   <div style={{ position: 'absolute', left: '10%', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <Server size={32} color="#94A3B8" />
-                    <span style={{ color: '#E2E8F0', fontSize: '11px', marginTop: '6px', fontWeight: 600 }}>App Server</span>
-                    <span style={{ color: '#64748B', fontSize: '10px' }}>10.0.1.1</span>
+                    <span style={{ color: '#E2E8F0', fontSize: '11px', marginTop: '6px', fontWeight: 600 }}>mongos Router</span>
+                    <span style={{ color: '#64748B', fontSize: '10px' }}>10.0.2.1</span>
                   </div>
 
                   {/* Flowing Query Particles */}
                   {particles.map(p => {
-                    let animationName: string;
-                    if (p.isReplicationCopy) {
-                      animationName = `replicationToReplica${p.index ?? 0}`;
-                    } else if (p.isWrite) {
-                      animationName = 'flowToPrimary';
-                    } else {
-                      animationName = p.target === 'primary' ? 'readFlowToPrimary' : `readFlowToReplica${p.index ?? 0}`;
-                    }
-                    const color = p.isWrite ? '#10B981' : '#3B82F6';
+                    const animName = p.isReplicaCopy 
+                      ? `replicationToShardReplica${p.target}_${p.replicaIndex ?? 0}`
+                      : (p.isWrite 
+                          ? `flowToShardPrimary${p.target}`
+                          : (p.replicaIndex !== undefined 
+                              ? `readFlowToShardReplica${p.target}_${p.replicaIndex}` 
+                              : `readFlowToShardPrimary${p.target}`));
+                    const color = p.isWrite ? '#10B981' : (p.isStale ? '#F59E0B' : '#3B82F6');
                     return (
                       <div
                         key={p.id}
@@ -936,92 +876,103 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                         style={{
                           color,
                           backgroundColor: color,
-                          animation: `${animationName} 0.8s ease-in-out forwards`
+                          animation: `${animName} 0.8s ease-in-out forwards`
                         }}
                       />
                     );
                   })}
 
-                  {/* Arrow indicator */}
-                  <div style={{ position: 'absolute', left: '30%', top: '50%', transform: 'translateY(-50%)', color: trafficActive ? '#10B981' : '#475569' }}>
-                    <span className={trafficActive ? 'pulse' : ''} style={{ fontSize: '18px', fontWeight: 'bold' }}>➔</span>
-                  </div>
-                   {/* Primary DB Node */}
-                  <div style={{ position: 'absolute', left: '42%', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                      <Database size={44} color={isPrimaryCrashed ? '#EF4444' : '#10B981'} />
-                      {activeHighlightNode === 'primary' && (
-                        <div className="ring-glow" style={{ color: isPrimaryCrashed ? '#EF4444' : '#10B981' }} />
-                      )}
-                    </div>
-                    <span style={{ color: '#E2E8F0', fontSize: '12px', fontWeight: 'bold', marginTop: '6px' }}>Primary SQL DB</span>
-                    <span style={{ color: isPrimaryCrashed ? '#EF4444' : '#10B981', fontSize: '10px' }}>
-                      {isPrimaryCrashed ? 'OFFLINE (Crashed)' : 'ONLINE (10.0.1.2)'}
-                    </span>
+                  {/* Shard Primaries List */}
+                  {Array.from({ length: shards }).map((_, i) => {
+                    const topPercent = shards === 1 ? 50 : 15 + (i * 70) / (shards - 1);
+                    const isNodeActive = activeHighlightNode === `shard-primary-${i}`;
+                    const isShardCrashed = !!crashedShards[i];
+                    return (
+                      <div 
+                        key={i} 
+                        style={{ 
+                          position: 'absolute', 
+                          left: '42%', 
+                          top: `${topPercent}%`, 
+                          transform: 'translateY(-50%)', 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          alignItems: 'center' 
+                        }}
+                      >
+                        <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                          <Database size={40} color={isShardCrashed ? '#EF4444' : (isNodeActive ? '#10B981' : '#64748B')} />
+                          {isNodeActive && (
+                            <div className="ring-glow" style={{ color: isShardCrashed ? '#EF4444' : '#10B981' }} />
+                          )}
+                        </div>
+                        <span style={{ color: '#E2E8F0', fontSize: '11px', fontWeight: 'bold', marginTop: '4px' }}>Shard Primary #{i + 1}</span>
+                        <span style={{ color: isShardCrashed ? '#EF4444' : '#10B981', fontSize: '9px' }}>
+                          {isShardCrashed ? 'OFFLINE' : `ONLINE (10.0.2.${10 + i * 10})`}
+                        </span>
+                      </div>
+                    );
+                  })}
 
-                    {/* Table Partitions Display */}
-                    {!isPrimaryCrashed && (
-                      <div style={{ display: 'flex', gap: '4px', marginTop: '10px', backgroundColor: 'rgba(30, 41, 59, 0.5)', padding: '4px 8px', borderRadius: '6px', border: '1px solid #334155' }}>
-                        {Array.from({ length: partitions }).map((_, pIdx) => {
-                          const isPartActive = activeHighlightNode === 'primary' && lastPartitionTarget === pIdx;
+                  {/* Replica Members List per Shard */}
+                  {replicas > 0 && Array.from({ length: shards }).map((_, i) => {
+                    const topPercent = shards === 1 ? 50 : 15 + (i * 70) / (shards - 1);
+                    return (
+                      <div 
+                        key={i} 
+                        style={{ 
+                          position: 'absolute', 
+                          right: '12%', 
+                          top: `${topPercent}%`, 
+                          transform: 'translateY(-50%)', 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          gap: '8px', 
+                          justifyContent: 'center' 
+                        }}
+                      >
+                        {Array.from({ length: replicas }).map((_, r) => {
+                          const repOffset = (r - (replicas - 1) / 2) * 12;
+                          const repTopPercent = replicas > 1 ? repOffset : 0;
+                          const isNodeActive = activeHighlightNode === `shard-replica-${i}-${r}`;
+                          
                           return (
-                            <div
-                              key={pIdx}
-                              style={{
-                                fontSize: '9px',
-                                padding: '2px 5px',
-                                borderRadius: '4px',
-                                backgroundColor: isPartActive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.6)',
-                                border: isPartActive ? '1px solid #10B981' : '1px solid #475569',
-                                color: isPartActive ? '#10B981' : '#94A3B8',
-                                fontWeight: 'bold',
-                                fontFamily: 'monospace',
-                                transition: 'all 0.15s ease-in-out'
+                            <div 
+                              key={r} 
+                              style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                transform: `translateY(${repTopPercent}px)` 
                               }}
-                              title={`Partition: users_p${pIdx}`}
                             >
-                              p{pIdx}
+                              <span style={{ color: '#3B82F6', fontSize: '12px' }}>➔</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                  <Database size={24} color={isNodeActive ? '#3B82F6' : '#475569'} />
+                                  {isNodeActive && (
+                                    <div className="ring-glow" style={{ color: '#3B82F6' }} />
+                                  )}
+                                </div>
+                                <span style={{ color: '#E2E8F0', fontSize: '9px' }}>Replica #{r + 1}</span>
+                                <span style={{ color: '#64748B', fontSize: '8px' }}>10.0.2.${10 + i * 10 + r + 1}</span>
+                              </div>
                             </div>
                           );
                         })}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Replicas container */}
-                  {replicas > 0 && (
-                    <div style={{ position: 'absolute', right: '12%', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: '16px', justifyContent: 'center' }}>
-                      {Array.from({ length: replicas }).map((_, i) => {
-                        const isNodeActive = activeHighlightNode === `replica-${i}`;
-                        return (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ color: '#3B82F6', fontSize: '12px' }}>➔</span>
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                              <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                <Database size={28} color="#3B82F6" />
-                                {isNodeActive && (
-                                  <div className="ring-glow" style={{ color: '#3B82F6' }} />
-                                )}
-                              </div>
-                              <span style={{ color: '#E2E8F0', fontSize: '10px', fontWeight: 600 }}>Replica #{i + 1}</span>
-                              <span style={{ color: '#64748B', fontSize: '9px' }}>10.0.1.{3 + i}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* Logs output */}
-              <div style={{ height: '150px', display: 'flex', flexDirection: 'column' }}>
+                            {/* Logs output */}
+              <div style={{ height: '140px', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748B', textTransform: 'uppercase', marginBottom: '6px' }}>
                   Simulated Event Log
                 </div>
                 <div style={{ flex: 1, backgroundColor: '#0F172A', color: '#94A3B8', borderRadius: '8px', padding: '10px', fontFamily: 'monospace', fontSize: '11px', overflowY: 'auto' }}>
                   {simLogs.map(log => (
-                    <div key={log.id} style={{ marginBottom: '4px', color: log.type === 'err' ? '#FCA5A5' : log.type === 'sys' ? '#6EE7B7' : log.type === 'write' ? '#A7F3D0' : '#93C5FD' }}>
+                    <div key={log.id} style={{ marginBottom: '4px', color: log.type === 'warn' ? '#F59E0B' : log.type === 'route' ? '#6EE7B7' : '#93C5FD' }}>
                       [{log.time}] {log.msg}
                     </div>
                   ))}
@@ -1034,7 +985,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
           {activeTab === 'explorer' && (
             <div style={styles.tabContent}>
               <div style={styles.sectionHeader}>
-                <span style={styles.sectionTitle}>Inspect tables and schema: {nodeName}</span>
+                <span style={styles.sectionTitle}>Inspect collections and fields: {nodeName}</span>
                 <button onClick={fetchExplorerData} disabled={loadingExplorer} style={styles.iconActionBtn}>
                   <RefreshCw size={14} className={loadingExplorer ? 'spin' : ''} />
                 </button>
@@ -1045,28 +996,19 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                   explorerError === 'starting_up' ? (
                     <div style={styles.errorContainer}>
                       <Loader2 size={24} className="spin" color="#3B82F6" style={{ marginBottom: 12 }} />
-                      <span style={styles.errorMessage}>Database server is initializing... This may take a few seconds.</span>
+                      <span style={styles.errorMessage}>NoSQL database container is initializing...</span>
                     </div>
                   ) : (
                     <div style={styles.errorContainer}>
                       <AlertCircle size={24} color="#EF4444" style={{ marginBottom: 12 }} />
                       <span style={styles.errorMessage}>{explorerError}</span>
-                      <button onClick={fetchExplorerData} style={styles.retryBtn}>
-                        <RefreshCw size={12} style={{ marginRight: 6 }} />
-                        Retry Schema Scan
-                      </button>
                     </div>
                   )
                 ) : explorerData.map(node => (
                   <div key={node.database} style={styles.treeNode}>
-                    <div style={styles.treeRow} onClick={() => toggleDBExpand(node.database)}>
+                    <div style={styles.treeRow} onClick={() => setExpandedDBs(prev => ({ ...prev, [node.database]: !prev[node.database] }))}>
                       <Database size={16} color="#3B82F6" style={{ marginRight: 8 }} />
                       <span style={styles.dbName}>{node.database}</span>
-                      {node.error && (
-                        <span title="Database offline/unreachable">
-                          <AlertCircle size={14} color="#EF4444" style={{ marginLeft: 8 }} />
-                        </span>
-                      )}
                     </div>
 
                     {expandedDBs[node.database] && (
@@ -1076,25 +1018,25 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                             const tblKey = `${node.database}:${table.name}`;
                             return (
                               <div key={table.name} style={styles.treeNode}>
-                                <div style={styles.treeRow} onClick={() => toggleTableExpand(tblKey)}>
+                                <div style={styles.treeRow} onClick={() => setExpandedCollections(prev => ({ ...prev, [tblKey]: !prev[tblKey] }))}>
                                   <Table size={14} color="#10B981" style={{ marginRight: 8 }} />
-                                  <span style={styles.tableName}>{table.name}</span>
+                                  <span style={styles.tableName}>{table.name} (Collection)</span>
                                   
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleViewTableData(node.database, table.name);
+                                      handleViewCollectionData(node.database, table.name);
                                     }}
                                     style={styles.inlineViewBtn}
-                                    title="View Table Data (SQL Shell)"
+                                    title="View Documents (Mongo Shell)"
                                     className="glass"
                                   >
                                     <Eye size={12} style={{ marginRight: 4 }} />
-                                    View Data
+                                    Find Documents
                                   </button>
                                 </div>
 
-                                {expandedTables[tblKey] && (
+                                {expandedCollections[tblKey] && (
                                   <div style={styles.treeChildren}>
                                     {table.columns.map(col => (
                                       <div key={col.name} style={styles.columnRow}>
@@ -1109,7 +1051,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                             );
                           })
                         ) : (
-                          <div style={styles.treeRowEmpty}>No public tables found.</div>
+                          <div style={styles.treeRowEmpty}>No collections found.</div>
                         )}
                       </div>
                     )}
@@ -1119,44 +1061,31 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
             </div>
           )}
 
-          {/* TAB: SQL Shell */}
+          {/* TAB: Mongo Shell */}
           {activeTab === 'shell' && (
             <div style={{ ...styles.tabContent, display: 'flex', flexDirection: 'column' }}>
               <div style={styles.shellHeader}>
-                <div style={styles.dbSelectRow}>
-                  <span style={styles.label}>Target Database:</span>
-                  <select
-                    value={selectedDb}
-                    onChange={(e) => setSelectedDb(e.target.value)}
-                    style={styles.select}
-                  >
-                    {explorerData.map(dbNode => (
-                      <option key={dbNode.database} value={dbNode.database}>
-                        {dbNode.database}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <span style={styles.label}>Interactive mongosh execution console</span>
                 <button
                   onClick={handleExecuteQuery}
-                  disabled={executing || !sqlQuery.trim()}
+                  disabled={executing || !mongoQuery.trim()}
                   style={styles.runBtn}
                 >
                   <Play size={14} style={{ marginRight: 6 }} fill="#FFF" />
-                  {executing ? 'Running...' : 'Execute Query'}
+                  {executing ? 'Evaluating...' : 'Run mongosh Expression'}
                 </button>
               </div>
 
               <textarea
-                value={sqlQuery}
-                onChange={(e) => setSqlQuery(e.target.value)}
-                placeholder="Write your SQL statements here..."
+                value={mongoQuery}
+                onChange={(e) => setMongoQuery(e.target.value)}
+                placeholder="Write your MongoDB JS commands here..."
                 style={styles.sqlTextarea}
               />
 
-              <div style={styles.terminalHeader}>Output Console</div>
+              <div style={styles.terminalHeader}>Result JSON Console</div>
               <pre style={styles.terminalOutput}>
-                <code>{queryOutput || 'No output. Execute a query to see result tables.'}</code>
+                <code>{queryOutput || 'No output. Execute an expression to see results.'}</code>
               </pre>
             </div>
           )}
@@ -1169,7 +1098,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                   <Search size={15} color="var(--color-text-muted)" style={styles.searchIcon} />
                   <input
                     type="text"
-                    placeholder="Search SQL commands or concepts..."
+                    placeholder="Search MongoDB helper commands..."
                     value={cheatQuery}
                     onChange={(e) => setCheatQuery(e.target.value)}
                     style={styles.searchInput}
@@ -1374,11 +1303,6 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '12px',
     flexShrink: 0,
   },
-  dbSelectRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
   label: {
     fontSize: '12px',
     fontWeight: 600,
@@ -1548,17 +1472,5 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'var(--color-text-secondary)',
     marginBottom: '16px',
     maxWidth: '400px',
-  },
-  retryBtn: {
-    backgroundColor: 'var(--color-accent)',
-    color: '#FFF',
-    border: 'none',
-    borderRadius: '6px',
-    padding: '6px 16px',
-    fontSize: '12px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
   }
 };

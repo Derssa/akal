@@ -41,7 +41,7 @@ export function validateArchitecture(
   const warnings: string[] = [];
   const successes: string[] = [];
 
-  const dbTypes = ['postgres', 'mysql'];
+  const dbTypes = ['postgres', 'sql', 'nosql', 'mysql'];
 
   // --- 1. ERROR CHECKS ---
   

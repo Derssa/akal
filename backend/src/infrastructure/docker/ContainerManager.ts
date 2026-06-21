@@ -6,7 +6,7 @@ export interface ContainerInfo {
   image: string;
   state: string;
   status: string;
-  type?: 'ubuntu' | 'postgres' | 'mysql' | 'nat' | 'loadbalancer' | 'autoscalinggroup';
+  type?: 'ubuntu' | 'postgres' | 'sql' | 'nosql' | 'nat' | 'loadbalancer' | 'autoscalinggroup';
   port?: string;
   ip?: string;
   asgId?: string;
@@ -36,7 +36,7 @@ export class ContainerManager {
   }
   private static readonly UBUNTU_IMAGE_TAG = 'derssa/backend-lab-ubuntu:v1';
   private static readonly POSTGRES_IMAGE_TAG = 'derssa/backend-lab-postgres:v1';
-  private static readonly MYSQL_IMAGE_TAG = 'derssa/backend-lab-mysql:v1';
+  private static readonly MONGO_IMAGE_TAG = 'derssa/backend-lab-mongo:v1';
   private static readonly NGINX_IMAGE_TAG = 'derssa/backend-lab-nginx:v1';
 
   /**
@@ -121,18 +121,18 @@ export class ContainerManager {
   }
 
   /**
-   * Ensures that the MySQL image exists locally.
+   * Ensures that the MongoDB image exists locally.
    */
-  private static async ensureMysqlImage(): Promise<void> {
+  private static async ensureMongoImage(): Promise<void> {
     const images = await docker.listImages();
     const hasImage = images.some(img =>
-      img.RepoTags && img.RepoTags.includes(this.MYSQL_IMAGE_TAG)
+      img.RepoTags && img.RepoTags.includes(this.MONGO_IMAGE_TAG)
     );
 
     if (!hasImage) {
-      console.log('Pulling MySQL image (first time only)...');
+      console.log('Pulling MongoDB image (first time only)...');
       await new Promise<void>((resolve, reject) => {
-        docker.pull(this.MYSQL_IMAGE_TAG, {}, (err, stream) => {
+        docker.pull(this.MONGO_IMAGE_TAG, {}, (err, stream) => {
           if (err) return reject(err);
           if (!stream) return reject(new Error('Pull stream is undefined'));
 
@@ -145,7 +145,7 @@ export class ContainerManager {
             (event) => {
               if (event.status) {
                 const progress = event.progress ? ` ${event.progress}` : '';
-                console.log(`[Docker Hub Pull - MySQL] ${event.status}${progress}`);
+                console.log(`[Docker Hub Pull - MongoDB] ${event.status}${progress}`);
               }
             }
           );
@@ -196,9 +196,9 @@ export class ContainerManager {
         let port = '';
         if (c.Ports && c.Ports.length > 0) {
           const matchedPostgres = c.Ports.find(p => p.PrivatePort === 5432);
-          const matchedMysql = c.Ports.find(p => p.PrivatePort === 3306);
+          const matchedMongo = c.Ports.find(p => p.PrivatePort === 27017);
           const matchedNginx = c.Ports.find(p => p.PrivatePort === 80);
-          const matchedPort = matchedPostgres || matchedMysql || matchedNginx;
+          const matchedPort = matchedPostgres || matchedMongo || matchedNginx;
           if (matchedPort && matchedPort.PublicPort) {
             port = matchedPort.PublicPort.toString();
           }
@@ -223,7 +223,7 @@ export class ContainerManager {
           image: c.Image,
           state: isFakeCrashed ? 'exited' : c.State,
           status: isFakeCrashed ? 'Exited (0) 1 second ago' : c.Status,
-          type: (c.Labels['akal.node.type'] || 'ubuntu') as 'ubuntu' | 'postgres' | 'mysql' | 'nat' | 'loadbalancer' | 'autoscalinggroup',
+          type: (c.Labels['akal.node.type'] || 'ubuntu') as 'ubuntu' | 'postgres' | 'sql' | 'nosql' | 'nat' | 'loadbalancer' | 'autoscalinggroup',
           port,
           ip,
           asgId,
@@ -240,21 +240,21 @@ export class ContainerManager {
     customImage?: string,
     extraLabels?: Record<string, string>
   ): Promise<ContainerInfo> {
-    const isPostgres = type === 'postgres';
-    const isMysql = type === 'mysql';
+    const isPostgres = type === 'postgres' || type === 'sql';
+    const isMongo = type === 'nosql';
     const isLoadBalancer = type === 'loadbalancer';
     let image = this.UBUNTU_IMAGE_TAG;
     if (customImage) image = customImage;
     else if (isPostgres) image = this.POSTGRES_IMAGE_TAG;
-    else if (isMysql) image = this.MYSQL_IMAGE_TAG;
+    else if (isMongo) image = this.MONGO_IMAGE_TAG;
     else if (isLoadBalancer) image = this.NGINX_IMAGE_TAG;
 
     if (customImage) {
       console.log(`[ContainerManager] Using custom image: ${customImage}`);
     } else if (isPostgres) {
       await this.ensurePostgresImage();
-    } else if (isMysql) {
-      await this.ensureMysqlImage();
+    } else if (isMongo) {
+      await this.ensureMongoImage();
     } else if (isLoadBalancer) {
       await this.ensureNginxImage();
     } else {
@@ -302,9 +302,8 @@ export class ContainerManager {
       createOpts.Env = ['POSTGRES_PASSWORD=postgres'];
       createOpts.Entrypoint = ['docker-entrypoint.sh'];
       createOpts.Cmd = ['postgres', '-c', 'fsync=off', '-c', 'synchronous_commit=off', '-c', 'full_page_writes=off'];
-    } else if (isMysql) {
-      createOpts.Env = ['MYSQL_ROOT_PASSWORD=mysql'];
-      createOpts.Cmd = ['mysqld', '--innodb-flush-log-at-trx-commit=2', '--innodb-doublewrite=0', '--skip-innodb-doublewrite'];
+    } else if (isMongo) {
+      // MongoDB does not require special env vars for standard default use
     } else if (isLoadBalancer) {
       createOpts.HostConfig.PortBindings = {
         '80/tcp': [{ HostPort: '' }]
@@ -354,7 +353,7 @@ export class ContainerManager {
       image,
       state: 'running',
       status: 'Up less than a second',
-      type: type as 'ubuntu' | 'postgres' | 'mysql' | 'nat' | 'loadbalancer',
+      type: type as 'ubuntu' | 'postgres' | 'sql' | 'nosql' | 'nat' | 'loadbalancer',
       port,
       ip
     };
@@ -398,11 +397,11 @@ export class ContainerManager {
     });
   }
 
-  public static async executeMysqlCommand(containerId: string, database: string, sqlQuery: string, extraArgs: string[] = []): Promise<string> {
+  public static async executeMongoCommand(containerId: string, evalExpression: string): Promise<string> {
     const container = docker.getContainer(containerId);
 
     const exec = await container.exec({
-      Cmd: ['mysql', '-u', 'root', '-pmysql', '-D', database, ...extraArgs, '-e', sqlQuery],
+      Cmd: ['mongosh', '--quiet', '--eval', evalExpression],
       AttachStdout: true,
       AttachStderr: true
     });
@@ -423,13 +422,11 @@ export class ContainerManager {
       });
 
       stream.on('end', () => {
-        const warningText = 'mysql: [Warning] Using a password on the command line interface can be insecure.';
-        let cleanOutput = output.replace(warningText, '').trim();
-
+        let cleanOutput = output.trim();
         if (
-          cleanOutput.includes("Can't connect to local MySQL server through socket") ||
-          cleanOutput.includes("ERROR 2002 (HY000)") ||
-          cleanOutput.includes("ERROR 1045 (28000)")
+          cleanOutput.includes("MongoNetworkError") ||
+          cleanOutput.includes("connect failed") ||
+          cleanOutput.includes("ECONNREFUSED")
         ) {
           cleanOutput = "ERROR: Database server is still starting up. Please wait 5-10 seconds for initialization to complete and try again.";
         }
@@ -470,5 +467,14 @@ export class ContainerManager {
   public static async deleteContainer(id: string): Promise<void> {
     const container = docker.getContainer(id);
     await container.remove({ force: true });
+  }
+
+  public static async scaleContainer(id: string, cpus?: number, memory?: number): Promise<void> {
+    try {
+      console.log(`[ContainerManager] [SIMULATED] Scaled container ${id.slice(0, 12)} to CPU: ${cpus}, MEM: ${memory}MB`);
+    } catch (err) {
+      console.error(`[ContainerManager] Failed to scale container ${id}:`, err);
+      throw err;
+    }
   }
 }

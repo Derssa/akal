@@ -20,12 +20,12 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
   const isRunning = data.state === 'running';
 
   return (
-    <div className={styles.card}>
+    <div className={styles.card} style={{ borderColor: isRunning ? '#64748B' : undefined }}>
       <Handle type="target" position={Position.Left} className={styles.handle} />
 
       <div className={styles.header}>
         <div className={styles.titleContainer}>
-          <Database size={18} color={isRunning ? '#10B981' : '#6B7280'} />
+          <Database size={18} color={isRunning ? '#64748B' : '#6B7280'} />
           <span className={styles.title}>{data.name}</span>
           <button
             onClick={(e) => {
@@ -51,9 +51,9 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
           <div
             className={styles.indicator}
             style={{
-              backgroundColor: isRunning ? '#10B981' : '#EF4444',
+              backgroundColor: isRunning ? '#64748B' : '#EF4444',
               boxShadow: isRunning
-                ? '0 0 8px rgba(16, 185, 129, 0.6)'
+                ? '0 0 8px rgba(100, 116, 139, 0.6)'
                 : '0 0 8px rgba(239, 68, 68, 0.6)'
             }}
           />
@@ -68,7 +68,7 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
       {data.ip && (
         <div className={styles.details}>
           <span className={styles.label}>IP:</span>
-          <span className={styles.value} style={{ fontWeight: 'bold', color: '#10B981' }}>{data.ip}</span>
+          <span className={styles.value} style={{ fontWeight: 'bold', color: '#64748B' }}>{data.ip}</span>
         </div>
       )}
 
@@ -78,7 +78,7 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
             <button
               onClick={() => data.onInspect(data.id, data.name)}
               className={`${styles.btn} ${styles.btnPrimary}`}
-              style={{ backgroundColor: '#10B981' }} // Postgres Green
+              style={{ backgroundColor: '#64748B' }} // Slate Gray
               title="Inspect Database Explorer / Shell"
             >
               <Search size={14} style={{ marginRight: 4 }} />
@@ -98,7 +98,7 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
             className={`${styles.btn} ${styles.btnSuccess}`}
             title="Start Node"
           >
-            <Play size={14} style={{ marginRight: 4 }} fill="#10B981" />
+            <Play size={14} style={{ marginRight: 4 }} fill="#64748B" />
             Start
           </button>
         )}

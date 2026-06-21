@@ -1,4 +1,4 @@
-import { Play, Square, Trash2, Globe } from 'lucide-react';
+import { Play, Square, Trash2, ArrowRightLeft } from 'lucide-react';
 import styles from '../ServiceNode.module.css';
 
 interface NatNodeProps {
@@ -27,7 +27,7 @@ export default function NatNode({ data }: NatNodeProps) {
     >
       <div className={styles.header}>
         <div className={styles.titleContainer}>
-          <Globe size={18} color={isRunning ? '#8B5CF6' : '#6B7280'} />
+          <ArrowRightLeft size={18} color={isRunning ? '#8B5CF6' : '#6B7280'} />
           <span className={styles.title} style={{ color: '#6D28D9' }}>{data.name}</span>
         </div>
 
@@ -66,7 +66,7 @@ export default function NatNode({ data }: NatNodeProps) {
               style={{ backgroundColor: '#8B5CF6' }}
               title="View NAT Gateway details & guide"
             >
-              <Globe size={14} style={{ marginRight: 4 }} />
+              <ArrowRightLeft size={14} style={{ marginRight: 4 }} />
               Info & Guide
             </button>
             <button

@@ -3,7 +3,7 @@ import { VirtualNetworkMapper } from './virtualNetworkMapper';
 describe('VirtualNetworkMapper', () => {
   it('should map nodeIds to virtual endpoints with correct container names', () => {
     const projectId = 'test-project';
-    const nodeIds = ['ubuntu-node-1', 'postgres_db', 'mysql-3-node'];
+    const nodeIds = ['ubuntu-node-1', 'postgres_db', 'nosql-3-node'];
     
     const endpoints = VirtualNetworkMapper.mapNodesToEndpoints(projectId, nodeIds);
     
@@ -19,9 +19,9 @@ describe('VirtualNetworkMapper', () => {
       containerName: 'akal-lab-test-project-postgres_db'
     });
     expect(endpoints[2]).toEqual({
-      nodeId: 'mysql-3-node',
+      nodeId: 'nosql-3-node',
       projectId: 'test-project',
-      containerName: 'akal-lab-test-project-mysql-3-node'
+      containerName: 'akal-lab-test-project-nosql-3-node'
     });
   });
 

@@ -1,5 +1,5 @@
 import { Handle, Position } from '@xyflow/react';
-import { Play, Square, Trash2, Terminal as TermIcon, HardDrive, Shield } from 'lucide-react';
+import { Play, Square, Trash2, Terminal as TermIcon, Cpu, Shield } from 'lucide-react';
 import styles from '../ServiceNode.module.css';
 
 interface UbuntuNodeProps {
@@ -27,7 +27,7 @@ export default function UbuntuNode({ data }: UbuntuNodeProps) {
 
       <div className={styles.header}>
         <div className={styles.titleContainer}>
-          <HardDrive size={18} color={isRunning ? '#3B82F6' : '#6B7280'} />
+          <Cpu size={18} color={isRunning ? '#3B82F6' : '#6B7280'} />
           <span className={styles.title}>{data.name}</span>
           <button
             onClick={(e) => {

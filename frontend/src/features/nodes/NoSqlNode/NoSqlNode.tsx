@@ -1,8 +1,8 @@
 import { Handle, Position } from '@xyflow/react';
-import { Play, Square, Trash2, Database, Search, Shield } from 'lucide-react';
+import { Play, Square, Trash2, Braces, Search, Shield } from 'lucide-react';
 import styles from '../ServiceNode.module.css'; // Reuse core card styles for visual parity!
 
-interface MysqlNodeProps {
+interface NoSqlNodeProps {
   data: {
     id: string;
     name: string;
@@ -16,16 +16,16 @@ interface MysqlNodeProps {
   };
 }
 
-export default function MysqlNode({ data }: MysqlNodeProps) {
+export default function NoSqlNode({ data }: NoSqlNodeProps) {
   const isRunning = data.state === 'running';
 
   return (
-    <div className={styles.card}>
+    <div className={styles.card} style={{ borderColor: isRunning ? '#475569' : undefined }}>
       <Handle type="target" position={Position.Left} className={styles.handle} />
 
       <div className={styles.header}>
         <div className={styles.titleContainer}>
-          <Database size={18} color={isRunning ? '#F29111' : '#6B7280'} />
+          <Braces size={18} color={isRunning ? '#475569' : '#6B7280'} />
           <span className={styles.title}>{data.name}</span>
           <button
             onClick={(e) => {
@@ -47,13 +47,13 @@ export default function MysqlNode({ data }: MysqlNodeProps) {
           </button>
         </div>
 
-        <div className={styles.statusRow}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div
             className={styles.indicator}
             style={{
-              backgroundColor: isRunning ? '#10B981' : '#EF4444',
+              backgroundColor: isRunning ? '#475569' : '#EF4444',
               boxShadow: isRunning
-                ? '0 0 8px rgba(16, 185, 129, 0.6)'
+                ? '0 0 8px rgba(71, 85, 105, 0.6)'
                 : '0 0 8px rgba(239, 68, 68, 0.6)'
             }}
           />
@@ -63,12 +63,12 @@ export default function MysqlNode({ data }: MysqlNodeProps) {
 
       <div className={styles.details}>
         <span className={styles.label}>Port:</span>
-        <span className={styles.value}>3306</span>
+        <span className={styles.value}>27017</span>
       </div>
       {data.ip && (
         <div className={styles.details}>
           <span className={styles.label}>IP:</span>
-          <span className={styles.value} style={{ fontWeight: 'bold', color: '#10B981' }}>{data.ip}</span>
+          <span className={styles.value} style={{ fontWeight: 'bold', color: '#475569' }}>{data.ip}</span>
         </div>
       )}
 
@@ -78,7 +78,7 @@ export default function MysqlNode({ data }: MysqlNodeProps) {
             <button
               onClick={() => data.onInspect(data.id, data.name)}
               className={`${styles.btn} ${styles.btnPrimary}`}
-              style={{ backgroundColor: '#F29111' }} // MySQL Orange
+              style={{ backgroundColor: '#475569' }} // Charcoal Gray
               title="Inspect Database Explorer / Shell"
             >
               <Search size={14} style={{ marginRight: 4 }} />
@@ -98,7 +98,7 @@ export default function MysqlNode({ data }: MysqlNodeProps) {
             className={`${styles.btn} ${styles.btnSuccess}`}
             title="Start Node"
           >
-            <Play size={14} style={{ marginRight: 4 }} fill="#10B981" />
+            <Play size={14} style={{ marginRight: 4 }} fill="#475569" />
             Start
           </button>
         )}

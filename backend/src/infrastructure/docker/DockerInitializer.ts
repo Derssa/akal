@@ -182,7 +182,7 @@ export class DockerInitializer {
         
         console.log(`[DockerInitializer] Installing iptables inside build container...`);
         const exec = await tempContainer.exec({
-          Cmd: ['sh', '-c', 'apt-get update && apt-get install -y iptables'],
+          Cmd: ['sh', '-c', 'apt-get update && apt-get install -y iptables && apt-get clean && rm -rf /var/lib/apt/lists/*'],
           AttachStdout: true,
           AttachStderr: true
         });

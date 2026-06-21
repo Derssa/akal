@@ -146,7 +146,7 @@ export class ContainerService {
           }
 
           const columns = Object.entries(doc).map(([key, val]) => {
-            let typeStr = typeof val;
+            let typeStr: string = typeof val;
             if (val && typeof val === 'object') {
               if (val.$oid) typeStr = 'ObjectId';
               else if (val.$date) typeStr = 'Date';

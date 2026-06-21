@@ -51,6 +51,10 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   // Details & Config vertical limits
   const [cpuLimit, setCpuLimit] = useState(1);
   const [memoryLimit, setMemoryLimit] = useState(512);
+  const [storageLimit, setStorageLimit] = useState(50);
+  const [appliedCpu, setAppliedCpu] = useState(1);
+  const [appliedMemory, setAppliedMemory] = useState(512);
+  const [appliedStorage, setAppliedStorage] = useState(50);
   const [replicas, setReplicas] = useState(1);
   const [partitions, setPartitions] = useState(2);
   const [scalingLoading, setScalingLoading] = useState(false);
@@ -269,26 +273,59 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   }, [trafficActive, isPrimaryCrashed, replicas, partitions, activeTab]);
 
   const handleUpdateLimits = async () => {
-    try {
-      setScalingLoading(true);
-      const res = await fetch(`${API_BASE}/api/projects/${projectId}/containers/${containerId}/scale`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cpus: cpuLimit, memory: memoryLimit })
-      });
-      if (res.ok) {
-        setSimLogs(prev => [
-          { id: Math.random().toString(), type: 'sys', msg: `Limits updated: CPU ${cpuLimit} Cores, Memory ${memoryLimit}MB. docker update applied.`, time: new Date().toLocaleTimeString() },
-          ...prev
-        ]);
-      } else {
-        console.error('Failed to update limits');
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
+    setScalingLoading(true);
+    setTimeout(() => {
       setScalingLoading(false);
-    }
+      const cpuDiff = cpuLimit - appliedCpu;
+      const memDiff = memoryLimit - appliedMemory;
+      const storageDiff = storageLimit - appliedStorage;
+
+      let msg = `RESOURCE SCALING UPDATE: `;
+      let details: string[] = [];
+      let impacts: string[] = [];
+
+      if (cpuDiff > 0) {
+        details.push(`CPU limit increased to ${cpuLimit} Cores (+${cpuDiff.toFixed(1)} Cores)`);
+        impacts.push(`Faster query execution and parsing speeds`);
+      } else if (cpuDiff < 0) {
+        details.push(`CPU limit reduced to ${cpuLimit} Cores (${cpuDiff.toFixed(1)} Cores)`);
+        impacts.push(`Higher latency and potential thread throttling under query loads`);
+      }
+
+      if (memDiff > 0) {
+        details.push(`RAM allocated increased to ${memoryLimit}MB (+${memDiff}MB)`);
+        impacts.push(`Larger query sorting buffers and bigger search index caches`);
+      } else if (memDiff < 0) {
+        details.push(`RAM allocated reduced to ${memoryLimit}MB (${memDiff}MB)`);
+        impacts.push(`Higher disk swapping risk and slower database sorting buffer lookups`);
+      }
+
+      if (storageDiff > 0) {
+        details.push(`Persistent Storage volume expanded to ${storageLimit}GB (+${storageDiff}GB)`);
+        impacts.push(`Larger database file storage capacity for persistent tables/documents`);
+      } else if (storageDiff < 0) {
+        details.push(`Persistent Storage volume reduced to ${storageLimit}GB (${storageDiff}GB)`);
+        impacts.push(`Reduced capacity for transaction logs and raw seed datasets`);
+      }
+
+      if (details.length === 0) {
+        msg += "No resource configurations changed.";
+      } else {
+        msg += details.join(', ') + ". ";
+        if (impacts.length > 0) {
+          msg += `Performance impact: ${impacts.join('; ')}.`;
+        }
+      }
+
+      setSimLogs(prev => [
+        { id: Math.random().toString(), type: 'sys', msg, time: new Date().toLocaleTimeString() },
+        ...prev
+      ]);
+
+      setAppliedCpu(cpuLimit);
+      setAppliedMemory(memoryLimit);
+      setAppliedStorage(storageLimit);
+    }, 1200);
   };
 
   const handleExecuteQuery = async () => {
@@ -568,6 +605,22 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                       step="128"
                       value={memoryLimit}
                       onChange={(e) => setMemoryLimit(parseInt(e.target.value))}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600 }}>Storage Capacity</span>
+                      <span style={{ fontSize: '12px', color: '#2563EB', fontWeight: 'bold' }}>{storageLimit} GB</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="10"
+                      max="500"
+                      step="10"
+                      value={storageLimit}
+                      onChange={(e) => setStorageLimit(parseInt(e.target.value))}
                       style={{ width: '100%' }}
                     />
                   </div>

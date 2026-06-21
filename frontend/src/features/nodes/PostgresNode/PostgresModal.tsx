@@ -52,7 +52,20 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   const [cpuLimit, setCpuLimit] = useState(1);
   const [memoryLimit, setMemoryLimit] = useState(512);
   const [replicas, setReplicas] = useState(1);
+  const [partitions, setPartitions] = useState(2);
   const [scalingLoading, setScalingLoading] = useState(false);
+
+  // Zoom and Pan states for interactive topology viewport
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+
+  // Floating query particles
+  const [particles, setParticles] = useState<Array<{ id: string; target: 'primary' | 'replica'; index?: number; isWrite: boolean }>>([]);
+
+  // Active highlighted target node for simulation flash
+  const [activeHighlightNode, setActiveHighlightNode] = useState<string | null>(null);
 
   // Simulation tab states
   const [isPrimaryCrashed, setIsPrimaryCrashed] = useState(false);
@@ -100,14 +113,35 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
     fetchExplorerData();
   }, [fetchExplorerData]);
 
+  // Interactive zoom & pan helper handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsPanning(true);
+    setPanStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isPanning) return;
+    setPanOffset({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
+  };
+
+  const handleMouseUp = () => {
+    setIsPanning(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    const scaleChange = e.deltaY < 0 ? 0.08 : -0.08;
+    setZoomScale(prev => Math.max(0.5, Math.min(2.0, prev + scaleChange)));
+  };
+
   // Traffic simulation engine
   useEffect(() => {
     if (!trafficActive || activeTab !== 'simulation') return;
 
     const interval = setInterval(() => {
-      const isWrite = Math.random() > 0.6;
+      const isWrite = Math.random() > 0.55;
       const timeStr = new Date().toLocaleTimeString();
       const logId = Math.random().toString(36).substr(2, 9);
+      const particleId = Math.random().toString(36).substr(2, 9);
 
       if (isWrite) {
         if (isPrimaryCrashed) {
@@ -116,23 +150,50 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
             ...prev.slice(0, 19)
           ]);
           setSimMetrics(prev => ({ ...prev, errors: prev.errors + 1 }));
+          
+          // Spawn failed write particle
+          setParticles(prev => [...prev, { id: particleId, target: 'primary', isWrite: true }]);
+          setActiveHighlightNode('primary');
+          setTimeout(() => {
+            setParticles(prev => prev.filter(p => p.id !== particleId));
+            setActiveHighlightNode(null);
+          }, 800);
         } else {
           const insertId = Math.floor(Math.random() * 1000);
+          const targetPartition = insertId % partitions;
           setSimLogs(prev => [
-            { id: logId, type: 'write', msg: `WRITE SUCCESS: INSERT INTO users(id, name) VALUES(${insertId}, 'user_${insertId}') -> Routed to Primary (10.0.1.2)`, time: timeStr },
+            { id: logId, type: 'write', msg: `WRITE SUCCESS: INSERT INTO users VALUES(${insertId}) -> Routed to Primary (10.0.1.2) -> Partition [users_p${targetPartition}]`, time: timeStr },
             ...prev.slice(0, 19)
           ]);
           setSimMetrics(prev => ({ ...prev, writes: prev.writes + 1 }));
+
+          // Spawn successful write particle
+          setParticles(prev => [...prev, { id: particleId, target: 'primary', isWrite: true }]);
+          setActiveHighlightNode('primary');
+          setTimeout(() => {
+            setParticles(prev => prev.filter(p => p.id !== particleId));
+            setActiveHighlightNode(null);
+          }, 800);
         }
       } else {
         // Read
         if (replicas > 0) {
           const targetReplica = Math.floor(Math.random() * replicas) + 1;
+          const readId = Math.floor(Math.random() * 1000);
+          const sourcePartition = readId % partitions;
           setSimLogs(prev => [
-            { id: logId, type: 'read', msg: `READ SUCCESS: SELECT * FROM users LIMIT 10 -> Balanced to Replica #${targetReplica} (10.0.1.${2 + targetReplica})`, time: timeStr },
+            { id: logId, type: 'read', msg: `READ SUCCESS: SELECT * FROM users_p${sourcePartition} -> Load balanced to Replica #${targetReplica} (10.0.1.${2 + targetReplica})`, time: timeStr },
             ...prev.slice(0, 19)
           ]);
           setSimMetrics(prev => ({ ...prev, reads: prev.reads + 1 }));
+
+          // Spawn replica read particle
+          setParticles(prev => [...prev, { id: particleId, target: 'replica', index: targetReplica - 1, isWrite: false }]);
+          setActiveHighlightNode(`replica-${targetReplica - 1}`);
+          setTimeout(() => {
+            setParticles(prev => prev.filter(p => p.id !== particleId));
+            setActiveHighlightNode(null);
+          }, 800);
         } else {
           if (isPrimaryCrashed) {
             setSimLogs(prev => [
@@ -140,19 +201,37 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
               ...prev.slice(0, 19)
             ]);
             setSimMetrics(prev => ({ ...prev, errors: prev.errors + 1 }));
+
+            // Spawn failed read particle
+            setParticles(prev => [...prev, { id: particleId, target: 'primary', isWrite: false }]);
+            setActiveHighlightNode('primary');
+            setTimeout(() => {
+              setParticles(prev => prev.filter(p => p.id !== particleId));
+              setActiveHighlightNode(null);
+            }, 800);
           } else {
+            const readId = Math.floor(Math.random() * 1000);
+            const sourcePartition = readId % partitions;
             setSimLogs(prev => [
-              { id: logId, type: 'read', msg: `READ SUCCESS: SELECT * FROM users LIMIT 10 -> Routed to Primary (10.0.1.2) [No Replicas Defined]`, time: timeStr },
+              { id: logId, type: 'read', msg: `READ SUCCESS: SELECT * FROM users_p${sourcePartition} -> Routed to Primary (10.0.1.2) [No Replicas Defined]`, time: timeStr },
               ...prev.slice(0, 19)
             ]);
             setSimMetrics(prev => ({ ...prev, reads: prev.reads + 1 }));
+
+            // Spawn primary read particle
+            setParticles(prev => [...prev, { id: particleId, target: 'primary', isWrite: false }]);
+            setActiveHighlightNode('primary');
+            setTimeout(() => {
+              setParticles(prev => prev.filter(p => p.id !== particleId));
+              setActiveHighlightNode(null);
+            }, 800);
           }
         }
       }
-    }, 1200);
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [trafficActive, isPrimaryCrashed, replicas, activeTab]);
+  }, [trafficActive, isPrimaryCrashed, replicas, partitions, activeTab]);
 
   const handleUpdateLimits = async () => {
     try {
@@ -272,6 +351,45 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
     );
   });
 
+  const getReplicasStyles = () => {
+    let styleStr = '';
+    if (replicas === 1) {
+      styleStr += `
+        @keyframes flowToReplica0 {
+          0% { left: 15%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 50%; opacity: 0; }
+        }
+      `;
+    } else if (replicas === 2) {
+      styleStr += `
+        @keyframes flowToReplica0 {
+          0% { left: 15%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 35%; opacity: 0; }
+        }
+        @keyframes flowToReplica1 {
+          0% { left: 15%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 65%; opacity: 0; }
+        }
+      `;
+    } else if (replicas === 3) {
+      styleStr += `
+        @keyframes flowToReplica0 {
+          0% { left: 15%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 20%; opacity: 0; }
+        }
+        @keyframes flowToReplica1 {
+          0% { left: 15%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 50%; opacity: 0; }
+        }
+        @keyframes flowToReplica2 {
+          0% { left: 15%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 80%; opacity: 0; }
+        }
+      `;
+    }
+    return styleStr;
+  };
+
   return (
     <div style={styles.overlay}>
       <div style={styles.container} className="glass">
@@ -383,32 +501,56 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                   </button>
                 </div>
 
-                <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px' }}>
-                  <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#334155' }}>Horizontal Scaling (Read Replicas)</h4>
+                 <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px' }}>
+                  <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#334155' }}>Horizontal Scaling & Partitioning</h4>
                   
-                  <div style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
-                      Replica Pool Size
-                    </label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <button
-                        onClick={() => setReplicas(prev => Math.max(0, prev - 1))}
-                        style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
-                      >
-                        -
-                      </button>
-                      <span style={{ fontSize: '16px', fontWeight: 'bold', width: '20px', textAlign: 'center' }}>{replicas}</span>
-                      <button
-                        onClick={() => setReplicas(prev => Math.min(3, prev + 1))}
-                        style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
-                      >
-                        +
-                      </button>
+                  <div style={{ marginBottom: '16px', display: 'flex', gap: '24px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
+                        Replica Pool Size
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button
+                          onClick={() => setReplicas(prev => Math.max(0, prev - 1))}
+                          style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                          -
+                        </button>
+                        <span style={{ fontSize: '16px', fontWeight: 'bold', width: '20px', textAlign: 'center' }}>{replicas}</span>
+                        <button
+                          onClick={() => setReplicas(prev => Math.min(3, prev + 1))}
+                          style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
-                    <span style={{ fontSize: '11px', color: '#64748B', display: 'block', marginTop: '6px' }}>
-                      Add up to 3 read replicas to handle incoming SELECT queries. Writes are always directed to the Primary.
-                    </span>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, marginBottom: '8px' }}>
+                        Table Partitions
+                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <button
+                          onClick={() => setPartitions(prev => Math.max(1, prev - 1))}
+                          style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                          -
+                        </button>
+                        <span style={{ fontSize: '16px', fontWeight: 'bold', width: '20px', textAlign: 'center' }}>{partitions}</span>
+                        <button
+                          onClick={() => setPartitions(prev => Math.min(5, prev + 1))}
+                          style={{ width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #CBD5E1', cursor: 'pointer', fontWeight: 'bold' }}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                   </div>
+
+                  <span style={{ fontSize: '11px', color: '#64748B', display: 'block', marginBottom: '12px' }}>
+                    Replicas scale reads. Partitions divide large datasets (e.g. users) horizontally into sub-tables (p0 to p4) for optimized search performance.
+                  </span>
 
                   <div style={{ backgroundColor: '#F8FAFC', borderRadius: '6px', padding: '12px', borderLeft: '3px solid #2563EB' }}>
                     <h5 style={{ margin: '0 0 4px 0', fontSize: '11px', textTransform: 'uppercase', color: '#475569' }}>Topology Note</h5>
@@ -519,44 +661,157 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
                 </div>
               </div>
 
-              {/* Topology Map */}
-              <div style={{ flex: 1, minHeight: '180px', border: '1px solid #E2E8F0', borderRadius: '8px', backgroundColor: '#0F172A', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
-                {/* Client source */}
-                <div style={{ position: 'absolute', left: '10%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <Server size={32} color="#94A3B8" />
-                  <span style={{ color: '#E2E8F0', fontSize: '11px', marginTop: '6px' }}>App Server</span>
-                  <span style={{ color: '#64748B', fontSize: '10px' }}>10.0.1.1</span>
-                </div>
+              {/* Dynamic CSS Styles for Simulation Animations */}
+              <style dangerouslySetInnerHTML={{__html: `
+                @keyframes flowToPrimary {
+                  0% { left: 15%; top: 50%; opacity: 1; }
+                  100% { left: 45%; top: 50%; opacity: 0; }
+                }
+                .flow-particle {
+                  position: absolute;
+                  width: 8px;
+                  height: 8px;
+                  border-radius: 50%;
+                  pointer-events: none;
+                  z-index: 20;
+                  box-shadow: 0 0 8px currentColor;
+                }
+                .ring-glow {
+                  position: absolute;
+                  border-radius: 50%;
+                  pointer-events: none;
+                  animation: ringFlash 0.8s ease-out forwards;
+                  border: 2px solid currentColor;
+                  z-index: 10;
+                }
+                @keyframes ringFlash {
+                  0% { width: 40px; height: 40px; opacity: 0.8; }
+                  100% { width: 80px; height: 80px; opacity: 0; }
+                }
+                ${getReplicasStyles()}
+              `}} />
 
-                {/* Arrow */}
-                <div style={{ position: 'absolute', left: '30%', color: trafficActive ? '#10B981' : '#475569' }}>
-                  <span className={trafficActive ? 'pulse' : ''} style={{ fontSize: '18px', fontWeight: 'bold' }}>➔</span>
-                </div>
+              {/* Topology Map Wrapper (Zoom/Pan Container) */}
+              <div 
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                onWheel={handleWheel}
+                style={{ 
+                  flex: 1, 
+                  minHeight: '260px', 
+                  border: '1px solid #E2E8F0', 
+                  borderRadius: '8px', 
+                  backgroundColor: '#0F172A', 
+                  position: 'relative', 
+                  overflow: 'hidden',
+                  cursor: isPanning ? 'grabbing' : 'grab',
+                  userSelect: 'none'
+                }}
+              >
+                {/* Reset Zoom Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setZoomScale(1);
+                    setPanOffset({ x: 0, y: 0 });
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '10px',
+                    left: '10px',
+                    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                    border: '1px solid #334155',
+                    borderRadius: '4px',
+                    color: '#94A3B8',
+                    padding: '2px 8px',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    zIndex: 30
+                  }}
+                >
+                  Reset View (Zoom: {Math.round(zoomScale * 100)}%)
+                </button>
 
-                {/* Primary DB */}
-                <div style={{ position: 'absolute', left: '45%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <Database size={44} color={isPrimaryCrashed ? '#EF4444' : '#10B981'} />
-                  <span style={{ color: '#E2E8F0', fontSize: '12px', fontWeight: 'bold', marginTop: '6px' }}>Primary SQL DB</span>
-                  <span style={{ color: isPrimaryCrashed ? '#EF4444' : '#10B981', fontSize: '10px' }}>
-                    {isPrimaryCrashed ? 'OFFLINE (Crashed)' : 'ONLINE (10.0.1.2)'}
-                  </span>
-                </div>
-
-                {/* Replicas container */}
-                {replicas > 0 && (
-                  <div style={{ position: 'absolute', right: '10%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    {Array.from({ length: replicas }).map((_, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ color: '#3B82F6', fontSize: '12px' }}>➔</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <Database size={28} color="#3B82F6" />
-                          <span style={{ color: '#E2E8F0', fontSize: '10px' }}>Replica #{i + 1}</span>
-                          <span style={{ color: '#64748B', fontSize: '9px' }}>10.0.1.{3 + i}</span>
-                        </div>
-                      </div>
-                    ))}
+                {/* Inner Viewport applying Zoom & Pan */}
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  position: 'absolute',
+                  transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale})`,
+                  transformOrigin: 'center center',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}>
+                  {/* Client source */}
+                  <div style={{ position: 'absolute', left: '10%', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <Server size={32} color="#94A3B8" />
+                    <span style={{ color: '#E2E8F0', fontSize: '11px', marginTop: '6px', fontWeight: 600 }}>App Server</span>
+                    <span style={{ color: '#64748B', fontSize: '10px' }}>10.0.1.1</span>
                   </div>
-                )}
+
+                  {/* Flowing Query Particles */}
+                  {particles.map(p => {
+                    const animationName = p.target === 'primary' ? 'flowToPrimary' : `flowToReplica${p.index ?? 0}`;
+                    const color = p.isWrite ? '#10B981' : '#3B82F6';
+                    return (
+                      <div
+                        key={p.id}
+                        className="flow-particle"
+                        style={{
+                          color,
+                          backgroundColor: color,
+                          animation: `${animationName} 0.8s ease-in-out forwards`
+                        }}
+                      />
+                    );
+                  })}
+
+                  {/* Arrow indicator */}
+                  <div style={{ position: 'absolute', left: '30%', top: '50%', transform: 'translateY(-50%)', color: trafficActive ? '#10B981' : '#475569' }}>
+                    <span className={trafficActive ? 'pulse' : ''} style={{ fontSize: '18px', fontWeight: 'bold' }}>➔</span>
+                  </div>
+
+                  {/* Primary DB Node */}
+                  <div style={{ position: 'absolute', left: '42%', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      <Database size={44} color={isPrimaryCrashed ? '#EF4444' : '#10B981'} />
+                      {activeHighlightNode === 'primary' && (
+                        <div className="ring-glow" style={{ color: isPrimaryCrashed ? '#EF4444' : '#10B981' }} />
+                      )}
+                    </div>
+                    <span style={{ color: '#E2E8F0', fontSize: '12px', fontWeight: 'bold', marginTop: '6px' }}>Primary SQL DB</span>
+                    <span style={{ color: isPrimaryCrashed ? '#EF4444' : '#10B981', fontSize: '10px' }}>
+                      {isPrimaryCrashed ? 'OFFLINE (Crashed)' : 'ONLINE (10.0.1.2)'}
+                    </span>
+                  </div>
+
+                  {/* Replicas container */}
+                  {replicas > 0 && (
+                    <div style={{ position: 'absolute', right: '12%', top: '50%', transform: 'translateY(-50%)', display: 'flex', flexDirection: 'column', gap: '16px', justifyContent: 'center' }}>
+                      {Array.from({ length: replicas }).map((_, i) => {
+                        const isNodeActive = activeHighlightNode === `replica-${i}`;
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ color: '#3B82F6', fontSize: '12px' }}>➔</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                <Database size={28} color="#3B82F6" />
+                                {isNodeActive && (
+                                  <div className="ring-glow" style={{ color: '#3B82F6' }} />
+                                )}
+                              </div>
+                              <span style={{ color: '#E2E8F0', fontSize: '10px', fontWeight: 600 }}>Replica #{i + 1}</span>
+                              <span style={{ color: '#64748B', fontSize: '9px' }}>10.0.1.{3 + i}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Logs output */}

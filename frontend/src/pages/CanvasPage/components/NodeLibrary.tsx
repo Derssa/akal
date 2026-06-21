@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Server, Database, Library, Network, Search, GitFork, Braces, Layers, ArrowRightLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Library, Network, Search, GitFork, Braces, Layers, ArrowRightLeft, Cpu } from 'lucide-react';
 
 interface NodeLibraryProps {
   onCollapseChange?: (collapsed: boolean) => void;
@@ -59,10 +59,10 @@ export default function NodeLibrary({ onCollapseChange }: NodeLibraryProps) {
       nodes: [
         {
           type: 'ubuntu',
-          name: 'Ubuntu Server',
+          name: 'Server',
           desc: 'Standard terminal shell',
-          icon: <Server size={18} color="#3B82F6" />,
-          collapsedIcon: <Server size={20} color="#3B82F6" />
+          icon: <Cpu size={18} color="#3B82F6" />,
+          collapsedIcon: <Cpu size={20} color="#3B82F6" />
         },
         {
           type: 'autoscalinggroup',

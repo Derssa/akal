@@ -57,6 +57,9 @@ export default function NoSqlModal({ containerId, nodeName, projectId, onClose }
   const [shards, setShards] = useState(2);
   const [replicas, setReplicas] = useState(1);
   const [scalingLoading, setScalingLoading] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(
+    "Database operating at baseline resources: 1 vCPU, 512MB RAM, 50GB storage. Handles standard query throughput."
+  );
 
   // Zoom and Pan states for interactive topology viewport
   const [zoomScale, setZoomScale] = useState(1);
@@ -341,51 +344,45 @@ export default function NoSqlModal({ containerId, nodeName, projectId, onClose }
     setScalingLoading(true);
     setTimeout(() => {
       setScalingLoading(false);
-      const cpuDiff = cpuLimit - appliedCpu;
-      const memDiff = memoryLimit - appliedMemory;
-      const storageDiff = storageLimit - appliedStorage;
+      
+      const cpuIncreased = cpuLimit > appliedCpu;
+      const cpuDecreased = cpuLimit < appliedCpu;
+      const memIncreased = memoryLimit > appliedMemory;
+      const memDecreased = memoryLimit < appliedMemory;
+      const storageIncreased = storageLimit > appliedStorage;
+      const storageDecreased = storageLimit < appliedStorage;
 
-      let msg = `RESOURCE SCALING UPDATE: `;
-      let details: string[] = [];
-      let impacts: string[] = [];
-
-      if (cpuDiff > 0) {
-        details.push(`CPU limit increased to ${cpuLimit} Cores (+${cpuDiff.toFixed(1)} Cores)`);
-        impacts.push(`Faster query router hashing and document index operations`);
-      } else if (cpuDiff < 0) {
-        details.push(`CPU limit reduced to ${cpuLimit} Cores (${cpuDiff.toFixed(1)} Cores)`);
-        impacts.push(`Increased thread queuing times and slower document search throughput`);
-      }
-
-      if (memDiff > 0) {
-        details.push(`RAM allocated increased to ${memoryLimit}MB (+${memDiff}MB)`);
-        impacts.push(`Expanded WiredTiger cache size for faster in-memory document reads`);
-      } else if (memDiff < 0) {
-        details.push(`RAM allocated reduced to ${memoryLimit}MB (${memDiff}MB)`);
-        impacts.push(`Higher collection index disk-read rates and cache-eviction pressure`);
-      }
-
-      if (storageDiff > 0) {
-        details.push(`Persistent Storage volume expanded to ${storageLimit}GB (+${storageDiff}GB)`);
-        impacts.push(`Bigger disk allocation space for document collections and gridFS chunks`);
-      } else if (storageDiff < 0) {
-        details.push(`Persistent Storage volume reduced to ${storageLimit}GB (${storageDiff}GB)`);
-        impacts.push(`Constrained storage ceiling for raw BSON persistent data files`);
-      }
-
-      if (details.length === 0) {
-        msg += "No resource configurations changed.";
+      const throughputIncreased = (cpuIncreased || memIncreased) && !cpuDecreased && !memDecreased;
+      const throughputDecreased = (cpuDecreased || memDecreased) && !cpuIncreased && !memIncreased;
+      
+      let customMsg = "";
+      if (throughputIncreased && storageIncreased) {
+        customMsg = "now the database can handle more concurrent requests/transactions and store more data (expanded persistent disk).";
+      } else if (throughputDecreased && storageDecreased) {
+        customMsg = "now the database will handle fewer requests (higher risk of CPU/RAM throttling) and store less data (reduced storage space).";
+      } else if (throughputIncreased && storageDecreased) {
+        customMsg = "now the database can handle more requests (faster query performance) but will store less data due to reduced storage limit.";
+      } else if (throughputDecreased && storageIncreased) {
+        customMsg = "now the database server will handle fewer requests (slower processing capacity) but can store more persistent data.";
+      } else if (throughputIncreased) {
+        customMsg = "now the database can handle more requests and process queries faster.";
+      } else if (throughputDecreased) {
+        customMsg = "now the database will handle fewer requests and experience increased latency under query loads.";
+      } else if (storageIncreased) {
+        customMsg = "now the database can store more data with expanded disk capacity.";
+      } else if (storageDecreased) {
+        customMsg = "now the database storage capacity is reduced.";
       } else {
-        msg += details.join(', ') + ". ";
-        if (impacts.length > 0) {
-          msg += `Performance impact: ${impacts.join('; ')}.`;
-        }
+        customMsg = "no resource limits were changed.";
       }
+
+      const formattedMsg = `RESOURCE SCALING UPDATE: Vertical limits applied. Configured: CPU=${cpuLimit} Cores, RAM=${memoryLimit}MB, Storage=${storageLimit}GB. Impact: ${customMsg}`;
 
       setSimLogs(prev => [
-        { id: Math.random().toString(), type: 'sys', msg, time: new Date().toLocaleTimeString() },
+        { id: Math.random().toString(), type: 'sys', msg: formattedMsg, time: new Date().toLocaleTimeString() },
         ...prev
       ]);
+      setFeedbackMessage(`Limits Applied! Impact: ${customMsg}`);
 
       setAppliedCpu(cpuLimit);
       setAppliedMemory(memoryLimit);
@@ -584,6 +581,22 @@ export default function NoSqlModal({ containerId, nodeName, projectId, onClose }
                   >
                     {scalingLoading ? 'Applying Resource Changes...' : 'Apply Resource Changes'}
                   </button>
+
+                  {feedbackMessage && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '10px',
+                      borderRadius: '6px',
+                      backgroundColor: '#F0F9FF',
+                      border: '1px solid #BAE6FD',
+                      fontSize: '12px',
+                      color: '#0369A1',
+                      lineHeight: '1.4'
+                    }}>
+                      <div style={{ fontWeight: 600, marginBottom: '2px' }}>System Status:</div>
+                      {feedbackMessage}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ border: '1px solid #E2E8F0', borderRadius: '8px', padding: '16px' }}>

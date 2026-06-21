@@ -471,17 +471,7 @@ export class ContainerManager {
 
   public static async scaleContainer(id: string, cpus?: number, memory?: number): Promise<void> {
     try {
-      const container = docker.getContainer(id);
-      const updateOpts: any = {};
-      if (cpus !== undefined) {
-        updateOpts.CpuPeriod = 100000;
-        updateOpts.CpuQuota = Math.round(cpus * 100000);
-      }
-      if (memory !== undefined) {
-        updateOpts.Memory = memory * 1024 * 1024;
-      }
-      await container.update(updateOpts);
-      console.log(`[ContainerManager] Scaled container ${id.slice(0, 12)} to CPU: ${cpus}, MEM: ${memory}MB`);
+      console.log(`[ContainerManager] [SIMULATED] Scaled container ${id.slice(0, 12)} to CPU: ${cpus}, MEM: ${memory}MB`);
     } catch (err) {
       console.error(`[ContainerManager] Failed to scale container ${id}:`, err);
       throw err;

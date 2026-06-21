@@ -781,9 +781,11 @@ export default function NoSqlModal({ containerId, nodeName, projectId, onClose }
                   {particles.map(p => {
                     const animName = p.isReplicaCopy 
                       ? `replicationToShardReplica${p.target}_${p.replicaIndex ?? 0}`
-                      : (p.replicaIndex !== undefined 
-                          ? `flowToShardReplica${p.target}_${p.replicaIndex}` 
-                          : `flowToShardPrimary${p.target}`);
+                      : (p.isWrite 
+                          ? `flowToShardPrimary${p.target}`
+                          : (p.replicaIndex !== undefined 
+                              ? `readFlowToShardReplica${p.target}_${p.replicaIndex}` 
+                              : `readFlowToShardPrimary${p.target}`));
                     const color = p.isWrite ? '#10B981' : (p.isStale ? '#F59E0B' : '#3B82F6');
                     return (
                       <div

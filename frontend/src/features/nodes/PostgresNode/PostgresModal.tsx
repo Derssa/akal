@@ -62,7 +62,7 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
 
   // Floating query particles
-  const [particles, setParticles] = useState<Array<{ id: string; target: 'primary' | 'replica'; index?: number; isWrite: boolean }>>([]);
+  const [particles, setParticles] = useState<Array<{ id: string; target: 'primary' | 'replica'; index?: number; isWrite: boolean; isReplicationCopy?: boolean }>>([]);
 
   // Active highlighted target node for simulation flash
   const [activeHighlightNode, setActiveHighlightNode] = useState<string | null>(null);
@@ -181,9 +181,20 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
           ]);
           setSimMetrics(prev => ({ ...prev, writes: prev.writes + 1 }));
 
-          // Spawn successful write particle
+           // Spawn successful write particle
           setParticles(prev => [...prev, { id: particleId, target: 'primary', isWrite: true }]);
           setActiveHighlightNode('primary');
+
+          // Trigger replicas update replication flow
+          if (replicas > 0) {
+            setTimeout(() => {
+              for (let r = 0; r < replicas; r++) {
+                const repParticleId = Math.random().toString(36).substr(2, 9);
+                setParticles(prev => [...prev, { id: repParticleId, target: 'replica', index: r, isWrite: true, isReplicationCopy: true }]);
+              }
+            }, 400);
+          }
+
           setTimeout(() => {
             setParticles(prev => prev.filter(p => p.id !== particleId));
             setActiveHighlightNode(null);
@@ -367,37 +378,91 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
 
   const getReplicasStyles = () => {
     let styleStr = '';
+    // Write request flow from client to primary
+    styleStr += `
+      @keyframes flowToPrimary {
+        0% { left: 15%; top: 50%; opacity: 1; }
+        100% { left: 45%; top: 50%; opacity: 0.8; }
+      }
+    `;
+
+    // Read request round-trip flow (client -> primary -> client)
+    styleStr += `
+      @keyframes readFlowToPrimary {
+        0% { left: 15%; top: 50%; opacity: 1; }
+        45% { left: 45%; top: 50%; opacity: 0.9; }
+        55% { left: 45%; top: 50%; opacity: 0.9; }
+        100% { left: 15%; top: 50%; opacity: 1; }
+      }
+    `;
+
     if (replicas === 1) {
       styleStr += `
-        @keyframes flowToReplica0 {
+        @keyframes readFlowToReplica0 {
           0% { left: 15%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 50%; opacity: 0; }
+          45% { left: 78%; top: 50%; opacity: 0.9; }
+          55% { left: 78%; top: 50%; opacity: 0.9; }
+          100% { left: 15%; top: 50%; opacity: 1; }
+        }
+        @keyframes replicationToReplica0 {
+          0% { left: 45%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 50%; opacity: 0.8; }
         }
       `;
     } else if (replicas === 2) {
       styleStr += `
-        @keyframes flowToReplica0 {
+        @keyframes readFlowToReplica0 {
           0% { left: 15%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 35%; opacity: 0; }
+          45% { left: 78%; top: 35%; opacity: 0.9; }
+          55% { left: 78%; top: 35%; opacity: 0.9; }
+          100% { left: 15%; top: 50%; opacity: 1; }
         }
-        @keyframes flowToReplica1 {
+        @keyframes readFlowToReplica1 {
           0% { left: 15%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 65%; opacity: 0; }
+          45% { left: 78%; top: 65%; opacity: 0.9; }
+          55% { left: 78%; top: 65%; opacity: 0.9; }
+          100% { left: 15%; top: 50%; opacity: 1; }
+        }
+        @keyframes replicationToReplica0 {
+          0% { left: 45%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 35%; opacity: 0.8; }
+        }
+        @keyframes replicationToReplica1 {
+          0% { left: 45%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 65%; opacity: 0.8; }
         }
       `;
     } else if (replicas === 3) {
       styleStr += `
-        @keyframes flowToReplica0 {
+        @keyframes readFlowToReplica0 {
           0% { left: 15%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 20%; opacity: 0; }
+          45% { left: 78%; top: 20%; opacity: 0.9; }
+          55% { left: 78%; top: 20%; opacity: 0.9; }
+          100% { left: 15%; top: 50%; opacity: 1; }
         }
-        @keyframes flowToReplica1 {
+        @keyframes readFlowToReplica1 {
           0% { left: 15%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 50%; opacity: 0; }
+          45% { left: 78%; top: 50%; opacity: 0.9; }
+          55% { left: 78%; top: 50%; opacity: 0.9; }
+          100% { left: 15%; top: 50%; opacity: 1; }
         }
-        @keyframes flowToReplica2 {
+        @keyframes readFlowToReplica2 {
           0% { left: 15%; top: 50%; opacity: 1; }
-          100% { left: 78%; top: 80%; opacity: 0; }
+          45% { left: 78%; top: 80%; opacity: 0.9; }
+          55% { left: 78%; top: 80%; opacity: 0.9; }
+          100% { left: 15%; top: 50%; opacity: 1; }
+        }
+        @keyframes replicationToReplica0 {
+          0% { left: 45%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 20%; opacity: 0.8; }
+        }
+        @keyframes replicationToReplica1 {
+          0% { left: 45%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 50%; opacity: 0.8; }
+        }
+        @keyframes replicationToReplica2 {
+          0% { left: 45%; top: 50%; opacity: 1; }
+          100% { left: 78%; top: 80%; opacity: 0.8; }
         }
       `;
     }
@@ -677,10 +742,6 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
 
               {/* Dynamic CSS Styles for Simulation Animations */}
               <style dangerouslySetInnerHTML={{__html: `
-                @keyframes flowToPrimary {
-                  0% { left: 15%; top: 50%; opacity: 1; }
-                  100% { left: 45%; top: 50%; opacity: 0; }
-                }
                 .flow-particle {
                   position: absolute;
                   width: 12px;
@@ -783,7 +844,14 @@ export default function PostgresModal({ containerId, nodeName, projectId, onClos
 
                   {/* Flowing Query Particles */}
                   {particles.map(p => {
-                    const animationName = p.target === 'primary' ? 'flowToPrimary' : `flowToReplica${p.index ?? 0}`;
+                    let animationName = '';
+                    if (p.isReplicationCopy) {
+                      animationName = `replicationToReplica${p.index ?? 0}`;
+                    } else if (p.isWrite) {
+                      animationName = 'flowToPrimary';
+                    } else {
+                      animationName = p.target === 'primary' ? 'readFlowToPrimary' : `readFlowToReplica${p.index ?? 0}`;
+                    }
                     const color = p.isWrite ? '#10B981' : '#3B82F6';
                     return (
                       <div

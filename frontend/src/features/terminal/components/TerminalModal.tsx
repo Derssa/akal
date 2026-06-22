@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { X, Terminal as TermIcon, BookOpen } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
 import LinuxCheatSheet from './LinuxCheatSheet';
+import { API_BASE } from '../../../shared/types';
 
 interface TerminalModalProps {
   containerId: string;
@@ -19,7 +20,7 @@ export default function TerminalModal({ containerId, nodeName, onClose }: Termin
   const [activeTab, setActiveTab] = useState<'terminal' | 'cheatsheet'>('terminal');
 
   useEffect(() => {
-    const socket = io('http://localhost:5000');
+    const socket = io(API_BASE);
     socketRef.current = socket;
 
     const term = new Terminal({

@@ -1,4 +1,5 @@
-import { Server, ArrowLeft, RefreshCw, Save, Network, Play } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Save, Network, Play } from 'lucide-react';
+import logo from '../../../assets/logo.png';
 
 interface CanvasTopbarProps {
   projectName: string;
@@ -26,7 +27,9 @@ export default function CanvasTopbar({
         <button onClick={onBack} style={styles.backBtn} title="Back to Projects">
           <ArrowLeft size={16} />
         </button>
-        <Server size={22} color="var(--color-accent)" style={{ marginLeft: 8 }} />
+        <div style={styles.iconWrap}>
+          <img src={logo} alt="Logo" style={{ width: '20px', height: '20px', objectFit: 'contain' }} />
+        </div>
         <span style={styles.brandTitle}>{projectName}</span>
         <span style={styles.badge}>Phase 1</span>
       </div>
@@ -150,5 +153,17 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     transition: 'background-color 0.2s, transform 0.1s',
     boxShadow: '0 1px 3px rgba(37, 99, 235, 0.3)',
+  },
+  iconWrap: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    background: '#FFFFFF',
+    border: '1px solid rgba(0, 0, 0, 0.08)',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: '6px',
   },
 };

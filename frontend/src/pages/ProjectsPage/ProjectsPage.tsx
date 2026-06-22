@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Folder, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import InputModal from '../../shared/components/InputModal';
 import ConfirmModal from '../../shared/components/ConfirmModal';
 import ProjectCard from './components/ProjectCard';
 import EmptyState from './components/EmptyState';
 import { API_BASE } from '../../shared/types';
 import type { Project } from '../../shared/types';
+import logo from '../../assets/logo.png';
 
 interface ProjectsPageProps {
   onSelectProject: (id: string, name: string) => void;
@@ -82,7 +83,7 @@ export default function ProjectsPage({ onSelectProject }: ProjectsPageProps) {
       <div style={styles.header}>
         <div style={styles.logoRow}>
           <div style={styles.iconWrap}>
-            <Folder size={22} color="var(--color-accent)" />
+            <img src={logo} alt="Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
           </div>
           <div>
             <h1 style={styles.title}>Project Stacks</h1>
@@ -161,9 +162,10 @@ const styles: Record<string, React.CSSProperties> = {
   iconWrap: {
     width: '44px',
     height: '44px',
-    borderRadius: '12px',
-    background: 'var(--color-accent-glow)',
-    border: '1px solid rgba(37, 99, 235, 0.15)',
+    borderRadius: '50%',
+    background: '#FFFFFF',
+    border: '1px solid rgba(0, 0, 0, 0.08)',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

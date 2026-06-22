@@ -15,22 +15,35 @@ function openUrl(url) {
   exec(`${start} ${url}`);
 }
 
-// Helper to find the next available TCP port
-function findAvailablePort(startPort) {
+// Helper to check if a port is free on both IPv4 and IPv6 loopbacks
+function checkPort(port) {
   return new Promise((resolve) => {
     const server = net.createServer();
-    server.once('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        resolve(findAvailablePort(startPort + 1));
-      } else {
-        resolve(startPort);
-      }
+    server.once('error', () => {
+      resolve(false);
     });
     server.once('listening', () => {
-      server.close(() => resolve(startPort));
+      server.close(() => {
+        // Double check on IPv6 localhost to ensure Vite can bind to it
+        const v6Server = net.createServer();
+        v6Server.once('error', () => resolve(false));
+        v6Server.once('listening', () => {
+          v6Server.close(() => resolve(true));
+        });
+        v6Server.listen(port, '::1');
+      });
     });
-    server.listen(startPort);
+    server.listen(port, '127.0.0.1');
   });
+}
+
+// Helper to find the next available TCP port
+async function findAvailablePort(startPort) {
+  let port = startPort;
+  while (!(await checkPort(port))) {
+    port++;
+  }
+  return port;
 }
 
 // Helper to check if Docker is installed

@@ -4,3 +4,6 @@ dist/
 build/
 .DS_Store
 *.log
+env.js
+/frontend/public/env.js
+/frontend/dist/env.js

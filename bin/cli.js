@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 
-const { execSync } = require('child_process');
+const { execSync, exec } = require('child_process');
 const path = require('path');
 const concurrently = require('concurrently');
-const open = require('open');
 
 const args = process.argv.slice(2);
 const command = args[0];
+
+// Helper to open a URL natively on the default browser
+function openUrl(url) {
+  const start = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start ""' : 'xdg-open';
+  exec(`${start} ${url}`);
+}
 
 // 1. Helper to check if Docker is installed
 function checkDocker() {
@@ -74,7 +79,7 @@ if (command === 'start') {
 
   // Automatically open browser tab
   setTimeout(() => {
-    open('http://localhost:23232').catch(() => {});
+    openUrl('http://localhost:23232');
   }, 1000);
 
   result.catch((err) => {

@@ -9,8 +9,7 @@
     "start": "node ./bin/cli.js start"
   },
   "dependencies": {
-    "concurrently": "^8.2.2",
-    "open": "^10.1.0"
+    "concurrently": "^8.2.2"
   },
   "files": [
     "bin/**/*",

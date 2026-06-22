@@ -1,0 +1,23 @@
+{
+  "name": "torolo",
+  "version": "1.0.0",
+  "description": "Interactive visual system design learning lab and container supervisor.",
+  "bin": {
+    "torolo": "./bin/cli.js"
+  },
+  "scripts": {
+    "start": "node ./bin/cli.js start"
+  },
+  "dependencies": {
+    "concurrently": "^8.2.2",
+    "open": "^10.1.0"
+  },
+  "files": [
+    "bin/**/*",
+    "backend/dist/**/*",
+    "backend/package.json",
+    "backend/projects.json",
+    "frontend/dist/**/*",
+    "frontend/package.json"
+  ]
+}

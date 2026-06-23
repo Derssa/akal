@@ -1,5 +1,6 @@
 import { Layers, Settings } from 'lucide-react';
 import BaseNode from '../components/BaseNode';
+import styles from '../ServiceNode.module.css';
 
 interface AsgNodeProps {
   data: {
@@ -40,7 +41,12 @@ export default function AsgNode({ data }: AsgNodeProps) {
       customBorder="2px dashed #EC4899"
       customTitleColor="#DB2777"
       hideHandles={true}
-      subtitle={<span>Instances: <b>{data.instanceCount || 0}</b></span>}
+      subtitle={
+        <>
+          <span className={styles.label}>Instances:</span>
+          <span className={styles.value}>{data.instanceCount || 0} Running</span>
+        </>
+      }
       onStart={data.onStart}
       onStop={data.onStop}
       onDelete={data.onDelete}

@@ -1,5 +1,6 @@
 import { GitFork, Settings } from 'lucide-react';
 import BaseNode from '../components/BaseNode';
+import styles from '../ServiceNode.module.css';
 
 interface LoadBalancerNodeProps {
   data: {
@@ -31,7 +32,12 @@ export default function LoadBalancerNode({ data }: LoadBalancerNodeProps) {
       icon={<GitFork size={18} color={isRunning ? '#EF4444' : '#6B7280'} />}
       customBorder="2px solid #EF4444"
       customTitleColor="#DC2626"
-      subtitle={data.ip ? <span style={{ color: '#10B981', fontWeight: 600 }}>{data.ip}</span> : 'Nginx ALB'}
+      subtitle={
+        <>
+          <span className={styles.label}>IP Address:</span>
+          <span className={styles.value} style={{ color: data.ip ? '#10B981' : undefined }}>{data.ip || 'Private'}</span>
+        </>
+      }
       onStart={data.onStart}
       onStop={data.onStop}
       onDelete={data.onDelete}

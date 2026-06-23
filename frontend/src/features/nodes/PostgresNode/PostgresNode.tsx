@@ -1,5 +1,6 @@
 import { Database, Search } from 'lucide-react';
 import BaseNode from '../components/BaseNode';
+import styles from '../ServiceNode.module.css';
 
 interface PostgresNodeProps {
   data: {
@@ -25,7 +26,12 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
       isRunning={isRunning}
       icon={<Database size={18} color={isRunning ? '#64748B' : '#6B7280'} />}
       customBorder={isRunning ? '1px solid #64748B' : undefined}
-      subtitle={<span>Port: <b>5432</b></span>}
+      subtitle={
+        <>
+          <span className={styles.label}>IP/Port:</span>
+          <span className={styles.value} style={{ color: data.ip ? '#10B981' : undefined }}>{data.ip ? `${data.ip}:5432` : '5432'}</span>
+        </>
+      }
       onStart={data.onStart}
       onStop={data.onStop}
       onDelete={data.onDelete}

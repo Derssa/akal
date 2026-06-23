@@ -103,7 +103,7 @@ export default function BaseNode({
       </div>
 
       {subtitle && (
-        <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div className={styles.details}>
           {subtitle}
         </div>
       )}

@@ -1,5 +1,6 @@
 import { Terminal as TermIcon, Cpu } from 'lucide-react';
 import BaseNode from '../components/BaseNode';
+import styles from '../ServiceNode.module.css';
 
 interface UbuntuNodeProps {
   data: {
@@ -27,7 +28,12 @@ export default function UbuntuNode({ data }: UbuntuNodeProps) {
       isRunning={isRunning}
       icon={<Cpu size={18} color={isRunning ? '#3B82F6' : '#6B7280'} />}
       customTitleColor="var(--color-text-primary)"
-      subtitle={data.ip ? <span style={{ color: '#10B981', fontWeight: 600 }}>{data.ip}</span> : 'Ubuntu latest'}
+      subtitle={
+        <>
+          <span className={styles.label}>IP Address:</span>
+          <span className={styles.value} style={{ color: data.ip ? '#10B981' : undefined }}>{data.ip || 'Private'}</span>
+        </>
+      }
       onStart={data.onStart}
       onStop={data.onStop}
       onDelete={data.onDelete}

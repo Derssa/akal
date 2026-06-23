@@ -94,8 +94,9 @@ export default function NetworkSimulatorPanel({
 
     for (const rule of inboundRules) {
       // Check Port match
+      const isIcmp = rule.protocol === 'ICMP';
       const portMatch = rule.port === 'ALL' || rule.port === port;
-      if (!portMatch) continue;
+      if (!portMatch && !isIcmp) continue;
 
       // Check Source match
       let sourceMatch = false;
@@ -111,11 +112,12 @@ export default function NetworkSimulatorPanel({
         if (rule.action === 'ALLOW') {
           isAllowed = true;
           matchingRule = rule;
+          break; // First match wins (like iptables)
         } else if (rule.action === 'DENY') {
           // Explicit DENY takes precedence
           isAllowed = false;
           matchingRule = rule;
-          break;
+          break; // First match wins
         }
       }
     }

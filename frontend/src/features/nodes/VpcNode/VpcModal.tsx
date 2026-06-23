@@ -134,8 +134,9 @@ export default function VpcModal({
     let matchingRule: SecurityGroupRule | null = null;
 
     for (const rule of inboundRules) {
+      const isIcmp = rule.protocol === 'ICMP';
       const portMatch = rule.port === 'ALL' || rule.port === port;
-      if (!portMatch) continue;
+      if (!portMatch && !isIcmp) continue;
 
       let sourceMatch = false;
       if (rule.source === '0.0.0.0/0') {
@@ -150,10 +151,11 @@ export default function VpcModal({
         if (rule.action === 'ALLOW') {
           isAllowed = true;
           matchingRule = rule;
+          break; // First match wins (like iptables)
         } else if (rule.action === 'DENY') {
           isAllowed = false;
           matchingRule = rule;
-          break;
+          break; // First match wins
         }
       }
     }

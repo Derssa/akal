@@ -1,8 +1,8 @@
-# AKAL — Backend Systems Lab
+# TOROLLO — Backend Systems Lab
 
 > **A local-first educational platform for backend engineering and system design, inspired by Packet Tracer.**
 
-AKAL is designed to help students visually learn backend architecture, Docker, microservices, databases, message brokers, scaling, failures, and distributed systems through an interactive, graph-based visual canvas.
+TOROLLO is designed to help students visually learn backend architecture, Docker, microservices, databases, message brokers, scaling, failures, and distributed systems through an interactive, graph-based visual canvas.
 
 ---
 
@@ -38,7 +38,7 @@ npx torollo start
 
 ## 🎨 Core Vision & The Canvas
 
-When a user opens AKAL, they are presented with an interactive visual canvas where they can design, run, and experiment with backend systems.
+When a user opens TOROLLO, they are presented with an interactive visual canvas where they can design, run, and experiment with backend systems.
 
 ### Supported Infrastructure Nodes
 You can drag and drop a wide range of infrastructure components:

@@ -16,6 +16,7 @@
     "socket.io": "^4.8.3"
   },
   "files": [
+    "README.md",
     "bin/**/*",
     "backend/dist/**/*",
     "backend/package.json",

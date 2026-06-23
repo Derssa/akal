@@ -1,4 +1,4 @@
-<img width="1584" height="396" alt="cover-torollo" src="https://github.com/user-attachments/assets/7d190ed7-afdc-42ad-bb58-887a301a04ad" />
+![cover-torollo](https://github.com/user-attachments/assets/7d190ed7-afdc-42ad-bb58-887a301a04ad)
 
 # TOROLLO — Backend Systems Lab
 

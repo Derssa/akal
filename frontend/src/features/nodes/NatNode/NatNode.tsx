@@ -26,6 +26,7 @@ export default function NatNode({ data }: NatNodeProps) {
       customBorder="2px solid #8B5CF6"
       customTitleColor="#6D28D9"
       hideHandles={true}
+      subtitle={data.ip ? <span style={{ color: '#10B981', fontWeight: 600 }}>{data.ip}</span> : 'NAT Gateway'}
       onStart={data.onStart}
       onStop={data.onStop}
       onDelete={data.onDelete}

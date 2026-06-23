@@ -27,6 +27,7 @@ export default function UbuntuNode({ data }: UbuntuNodeProps) {
       isRunning={isRunning}
       icon={<Cpu size={18} color={isRunning ? '#3B82F6' : '#6B7280'} />}
       customTitleColor="var(--color-text-primary)"
+      subtitle={data.ip ? <span style={{ color: '#10B981', fontWeight: 600 }}>{data.ip}</span> : 'Ubuntu latest'}
       onStart={data.onStart}
       onStop={data.onStop}
       onDelete={data.onDelete}

@@ -25,6 +25,7 @@ export default function NoSqlNode({ data }: NoSqlNodeProps) {
       isRunning={isRunning}
       icon={<Braces size={18} color={isRunning ? '#475569' : '#6B7280'} />}
       customBorder={isRunning ? '1px solid #475569' : undefined}
+      subtitle={<span>Port: <b>27017</b></span>}
       onStart={data.onStart}
       onStop={data.onStop}
       onDelete={data.onDelete}

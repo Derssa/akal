@@ -25,6 +25,7 @@ export default function PostgresNode({ data }: PostgresNodeProps) {
       isRunning={isRunning}
       icon={<Database size={18} color={isRunning ? '#64748B' : '#6B7280'} />}
       customBorder={isRunning ? '1px solid #64748B' : undefined}
+      subtitle={<span>Port: <b>5432</b></span>}
       onStart={data.onStart}
       onStop={data.onStop}
       onDelete={data.onDelete}

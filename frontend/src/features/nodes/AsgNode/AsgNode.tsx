@@ -40,6 +40,7 @@ export default function AsgNode({ data }: AsgNodeProps) {
       customBorder="2px dashed #EC4899"
       customTitleColor="#DB2777"
       hideHandles={true}
+      subtitle={<span>Instances: <b>{data.instanceCount || 0}</b></span>}
       onStart={data.onStart}
       onStop={data.onStop}
       onDelete={data.onDelete}

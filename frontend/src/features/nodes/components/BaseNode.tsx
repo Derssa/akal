@@ -28,6 +28,9 @@ interface BaseNodeProps {
     onClick: (id: string, name: string) => void;
     title?: string;
   };
+  
+  // Quick sub-info line
+  subtitle?: React.ReactNode;
 }
 
 export default function BaseNode({
@@ -42,7 +45,8 @@ export default function BaseNode({
   onStop,
   onDelete,
   onSecurityGroupOpen,
-  primaryAction
+  primaryAction,
+  subtitle
 }: BaseNodeProps) {
   
   const titleColor = customTitleColor || 'var(--color-text-primary)';
@@ -97,6 +101,12 @@ export default function BaseNode({
           <span className={styles.statusText}>{isRunning ? 'Online' : 'Offline'}</span>
         </div>
       </div>
+
+      {subtitle && (
+        <div style={{ fontSize: '11px', color: 'var(--color-text-secondary)', padding: '0 4px', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {subtitle}
+        </div>
+      )}
 
       <div className={styles.actions}>
         {isRunning ? (

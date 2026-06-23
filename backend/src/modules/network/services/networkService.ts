@@ -9,42 +9,52 @@ import docker from '../../../infrastructure/docker/DockerClient';
 export class NetworkService {
   private static provider: NetworkProvider = new DockerNetworkProvider();
   private static policyHashes: Record<string, string> = {};
+  private static taskQueues: Record<string, Promise<void>> = {};
 
   public static clearPolicyHash(projectId: string): void {
     delete this.policyHashes[projectId];
     console.log(`[NetworkService] Cleared policy hash cache for project: ${projectId}`);
   }
 
-  public static async applyPolicy(projectId: string, config: any): Promise<void> {
-    // 1. Performance optimization: Policy Hash Diffing
-    const serializedConfig = JSON.stringify(config);
-    const hash = crypto.createHash('sha256').update(serializedConfig).digest('hex');
+  public static applyPolicy(projectId: string, config: any): Promise<void> {
+    const currentQueue = this.taskQueues[projectId] || Promise.resolve();
 
-    if (this.policyHashes[projectId] === hash) {
-      console.log(`[NetworkService] No policy changes detected for project: ${projectId}. Skipping enforcement.`);
-      return;
-    }
+    const nextTask = currentQueue.then(async () => {
+      // 1. Performance optimization: Policy Hash Diffing
+      const serializedConfig = JSON.stringify(config);
+      const hash = crypto.createHash('sha256').update(serializedConfig).digest('hex');
 
-    console.log(`[NetworkService] Policy change detected for project: ${projectId}. Recomputing...`);
+      if (this.policyHashes[projectId] === hash) {
+        console.log(`[NetworkService] No policy changes detected for project: ${projectId}. Skipping enforcement.`);
+        return;
+      }
 
-    // 2. Compute normalized rules (Policy Engine layer)
-    const rules = await this.computeSemanticRules(projectId, config);
+      console.log(`[NetworkService] Policy change detected for project: ${projectId}. Recomputing...`);
 
-    // 3. enforcement planner compiling rules to intents
-    const intents = EnforcementPlanner.plan(projectId, rules);
+      // 2. Compute normalized rules (Policy Engine layer)
+      const rules = await this.computeSemanticRules(projectId, config);
 
-    // 4. Resolve endpoints
-    const nodeIds = Object.keys(config.nodeSubnetMap || {});
-    const endpoints = VirtualNetworkMapper.mapNodesToEndpoints(projectId, nodeIds);
+      // 3. enforcement planner compiling rules to intents
+      const intents = EnforcementPlanner.plan(projectId, rules);
 
-    // 5. Apply Plan via active provider
-    try {
-      await this.provider.applyPlan(projectId, endpoints, intents, config);
-      this.policyHashes[projectId] = hash;
-    } catch (err) {
-      console.error(`[NetworkService] Failed to apply network plan:`, err);
-      throw err;
-    }
+      // 4. Resolve endpoints
+      const nodeIds = Object.keys(config.nodeSubnetMap || {});
+      const endpoints = VirtualNetworkMapper.mapNodesToEndpoints(projectId, nodeIds);
+
+      // 5. Apply Plan via active provider
+      try {
+        await this.provider.applyPlan(projectId, endpoints, intents, config);
+        this.policyHashes[projectId] = hash;
+      } catch (err) {
+        console.error(`[NetworkService] Failed to apply network plan:`, err);
+        throw err;
+      }
+    }).catch(err => {
+      console.error(`[NetworkService] Queue error for project ${projectId}:`, err);
+    });
+
+    this.taskQueues[projectId] = nextTask;
+    return nextTask;
   }
 
   public static async cleanupProjectNetwork(projectId: string, config: any): Promise<void> {

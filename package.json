@@ -1,6 +1,6 @@
 {
   "name": "torollo",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Interactive visual system design learning lab and container supervisor.",
   "keywords": [
     "system-design",
@@ -33,6 +33,7 @@
   },
   "files": [
     "README.md",
+    "assets/**/*",
     "bin/**/*",
     "backend/dist/**/*",
     "backend/package.json",

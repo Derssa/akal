@@ -2,7 +2,7 @@
 
 # TOROLLO — Backend Systems Lab
 
-[![npm version](https://img.shields.io/npm/v/torollo.svg?style=flat-square)](https://www.npmjs.com/package/torollo)
+[![torollo version](https://img.shields.io/npm/v/torollo.svg?label=version&style=flat-square)](https://www.npmjs.com/package/torollo)
 [![license](https://img.shields.io/npm/l/torollo.svg?style=flat-square)](https://github.com/Derssa/torollo/blob/main/LICENSE)
 [![node-current](https://img.shields.io/node/v/torollo.svg?style=flat-square)](https://nodejs.org)
 

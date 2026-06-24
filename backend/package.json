@@ -41,5 +41,8 @@
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1"
+  },
+  "overrides": {
+    "js-yaml": "^4.1.0"
   }
 }

@@ -16,10 +16,382 @@
     "createPlaceholder": "ex: Lab App Web, Test API Gateway",
     "createSubmit": "Créer le Projet",
     "deleteTitle": "Supprimer le Projet",
-    "deleteConfirm": "Supprimer",
+    "deleteConfirm": "Supprimer le Projet",
+    "deleteMessage": "Cela supprimera définitivement \"{{name}}\" et arrêtera/supprimera tous les conteneurs Docker associés. Cette action est irréversible.",
     "noProjects": "Aucun projet trouvé. Créez-en un nouveau !",
     "lastUpdated": "Dernière mise à jour :",
     "open": "Ouvrir",
     "delete": "Supprimer"
+  },
+  "vpc": {
+    "titleInfo": "Paramètres VPC du Projet",
+    "titleSimulator": "Simulateur de Routage Traffic VPC",
+    "name": "Nom du VPC",
+    "namePlaceholder": "ex: VPC Principal",
+    "cidr": "Bloc CIDR",
+    "description": "Description",
+    "descriptionPlaceholder": "Décrivez ce VPC...",
+    "dns": "Résolution DNS Activée",
+    "igw": "Passerelle Internet (IGW) Attachée",
+    "save": "Enregistrer les Configurations",
+    "subnets": "Sous-réseaux Actifs",
+    "noSubnets": "Aucun sous-réseau dans le VPC. Ajoutez des sous-réseaux depuis la bibliothèque.",
+    "sourceNode": "Nœud Source",
+    "destNode": "Nœud de Destination",
+    "selectSource": "-- Sélectionner la Source --",
+    "selectDest": "-- Sélectionner la Destination --",
+    "subnetLabel": "Sous-réseau : ",
+    "noSubnetLabel": "Aucun Sous-réseau",
+    "destPort": "Port Dest",
+    "testComm": "Tester la Communication Packet"
+  },
+  "sg": {
+    "title": "Groupe de Sécurité :",
+    "description": "Les groupes de sécurité agissent comme un pare-feu virtuel pour votre instance afin de contrôler le trafic entrant et sortant. Par défaut, tout trafic non explicitement autorisé est refusé.",
+    "activeRules": "Règles de Trafic Actives",
+    "direction": "Direction",
+    "action": "Action",
+    "protocol": "Protocole",
+    "port": "Port",
+    "sourceDest": "Source / Dest",
+    "nodeLabel": "Nœud : ",
+    "subnetLabel": "Sous-réseau : ",
+    "noRules": "Aucune règle configurée. Tout le trafic est bloqué.",
+    "addRuleTitle": "Ajouter une Règle",
+    "inbound": "Entrant",
+    "outbound": "Sortant",
+    "portRange": "Plage de Ports",
+    "portPlaceholder": "ex: 80, 5432, ALL",
+    "sourceDestLabel": "Source / Destination",
+    "anywhere": "N'importe où (0.0.0.0/0)",
+    "subnetsGroup": "Sous-réseaux",
+    "nodesGroup": "Nœuds",
+    "addRuleBtn": "Ajouter une Règle"
+  },
+  "routing": {
+    "title": " - Table de Routage",
+    "description": "Une table de routage contient un ensemble de règles qui déterminent où le trafic réseau de votre sous-réseau est dirigé. Le trafic correspondant au CIDR de destination sera transféré vers la cible.",
+    "destCidr": "CIDR de Destination",
+    "target": "Cible",
+    "desc": "Description",
+    "action": "Action",
+    "remove": "Supprimer",
+    "noRoutes": "Aucune règle définie. Le trafic du sous-réseau sera isolé.",
+    "addTitle": "Ajouter une Règle de Routage",
+    "cidrPlaceholder": "ex: 0.0.0.0/0, 10.0.0.0/16",
+    "descPlaceholder": "Description de la règle (optionnel)",
+    "addBtn": "Ajouter la Règle",
+    "saving": "Enregistrement...",
+    "save": "Enregistrer les Modifications"
+  },
+  "postgres": {
+    "tabs": {
+      "details": "Détails & Config",
+      "simulation": "Simulation",
+      "explorer": "Explorateur de Base de Données",
+      "shell": "Shell SQL",
+      "cheatsheet": "Aide-mémoire SQL"
+    },
+    "details": {
+      "title": "Mise à l'échelle & Paramètres",
+      "desc": "Configurez les limites verticales du conteneur et les paramètres de réplication horizontale de la base de données.",
+      "verticalTitle": "Contrôles de Ressources Verticaux",
+      "cpuLabel": "Limite de Cœur CPU",
+      "ramLabel": "Limite de RAM",
+      "storageLabel": "Capacité de Stockage",
+      "applyBtn": "Appliquer les Changements de Ressources",
+      "applyingBtn": "Application des Changements...",
+      "sysStatus": "Statut du Système :",
+      "horizontalTitle": "Mise à l'échelle Horizontale & Partitionnement",
+      "replicaLabel": "Taille du Pool de Réplicas",
+      "partitionsLabel": "Partitions de Table",
+      "scaleDesc": "Les réplicas mettent à l'échelle les lectures. Les partitions divisent les grands ensembles de données (ex: utilisateurs) horizontalement en sous-tables (p0 à p4) pour optimiser les performances de recherche.",
+      "topologyTitle": "Note de Topologie",
+      "topologyDesc": "La réplication utilise le log-shipping. Les réplicas agissent comme des copies en lecture seule. Les pannes du primaire arrêtent les écritures, mais les requêtes de lecture restent disponibles sur les réplicas actifs."
+    },
+    "simulation": {
+      "title": "Tableau de Bord du Trafic & Basculement",
+      "desc": "Générez du trafic et testez des scénarios de haute disponibilité de la base de données.",
+      "startBtn": "Démarrer la Simulation",
+      "pauseBtn": "Mettre le Trafic en Pause",
+      "crashBtn": "Planter le Primaire",
+      "recoverBtn": "Récupérer le Primaire",
+      "promoteBtn": "Promouvoir un Réplica",
+      "reads": "Lectures Traitées",
+      "writes": "Écritures Traitées",
+      "errors": "Erreurs / Échecs",
+      "logTitle": "Journal d'Événements Simulé"
+    },
+    "explorer": {
+      "title": "Inspecter les tables et le schéma : ",
+      "initializing": "Le serveur de base de données s'initialise... Cela peut prendre quelques secondes.",
+      "retryBtn": "Réessayer le Scan du Schéma",
+      "viewDataBtn": "Voir les Données",
+      "noPublicTables": "Aucune table publique trouvée."
+    },
+    "shell": {
+      "targetDb": "Base de Données Cible :",
+      "executeBtn": "Exécuter la Requête",
+      "executingBtn": "Exécution en cours...",
+      "placeholder": "Écrivez vos instructions SQL ici...",
+      "consoleTitle": "Console de Sortie",
+      "emptyOutput": "Aucune sortie. Exécutez une requête pour voir les tables de résultats."
+    },
+    "cheatsheet": {
+      "placeholder": "Rechercher des commandes ou concepts SQL..."
+    }
+  },
+  "nosql": {
+    "tabs": {
+      "details": "Détails & Config",
+      "simulation": "Simulation",
+      "explorer": "Explorateur NoSQL",
+      "shell": "Shell Mongo",
+      "cheatsheet": "Aide-mémoire Mongo"
+    },
+    "details": {
+      "title": "Configuration de Base de Données NoSQL",
+      "desc": "Gérez les ressources verticales et partitionnez les shards de base de données horizontaux.",
+      "verticalTitle": "Limites Verticales",
+      "cpuLabel": "Limite de Cœur CPU",
+      "ramLabel": "Limite de Mémoire",
+      "storageLabel": "Capacité de Stockage",
+      "applyBtn": "Appliquer les Changements de Ressources",
+      "applyingBtn": "Application des Changements...",
+      "sysStatus": "Statut du Système :",
+      "horizontalTitle": "Mise à l'échelle Horizontale & Réplication",
+      "shardsLabel": "Partitions Shard",
+      "replicaLabel": "Membres du Réplica",
+      "scaleDesc": "Les shards partitionnent les collections horizontalement à l'aide de clés de hachage. Les réplicas offrent une haute disponibilité et une évolutivité en lecture pour chaque partition de shard.",
+      "topologyTitle": "Note d'Architecture",
+      "topologyDesc": "Le sharding MongoDB utilise mongos comme routeur de requêtes. Chaque shard peut être un ensemble de réplicas. Les réplicas synchronisent les données de manière asynchrone via le tailing d'oplog."
+    },
+    "simulation": {
+      "title": "Simulation du Routeur de Sharding MongoDB",
+      "desc": "Observez le hachage des requêtes et le délai de réplication secondaire (cohérence éventuelle).",
+      "startBtn": "Démarrer la Simulation",
+      "pauseBtn": "Mettre le Trafic en Pause",
+      "crashBtn": "Planter le Shard",
+      "recoverBtn": "Récupérer le Shard",
+      "routed": "Requêtes Routées",
+      "stale": "Lectures Obsolètes",
+      "logTitle": "Journal d'Événements Simulé"
+    },
+    "explorer": {
+      "title": "Inspecter les collections et documents : ",
+      "initializing": "Le serveur de base de données s'initialise... Cela peut prendre quelques secondes.",
+      "retryBtn": "Réessayer le Scan",
+      "viewDataBtn": "Voir les Documents",
+      "noCollections": "Aucune collection trouvée."
+    },
+    "shell": {
+      "executeBtn": "Évaluer la Requête",
+      "executingBtn": "Exécution en cours...",
+      "placeholder": "Écrivez vos commandes MongoDB ici (ex: db.users.find())",
+      "consoleTitle": "Console de Sortie",
+      "emptyOutput": "Aucune sortie. Exécutez une requête pour voir les documents de résultat."
+    },
+    "cheatsheet": {
+      "placeholder": "Rechercher des commandes ou concepts Mongo..."
+    }
+  },
+  "nat": {
+    "title": " - Passerelle NAT Gérée",
+    "tabs": {
+      "details": "Détails",
+      "explain": "Qu'est-ce qu'un NAT ?",
+      "guide": "Guide de Config",
+      "cheatsheet": "Aide-mémoire"
+    },
+    "details": {
+      "title": "Spécifications de la Passerelle (Simulateur Cloud)",
+      "resourceName": "Nom de la Ressource :",
+      "typeLabel": "Type :",
+      "typeValue": "Passerelle NAT Gérée (Style AWS)",
+      "statusLabel": "Statut :",
+      "active": "Actif / Disponible",
+      "offline": "Hors Ligne / Arrêté",
+      "ipLabel": "Adresse IP Publique :",
+      "pendingIp": "Attribution en attente...",
+      "infoCloud": "Standard Cloud : Dans les vrais clouds (AWS, GCP, Azure), les Passerelles NAT sont des services entièrement gérés. Les utilisateurs ne peuvent pas s'y connecter via SSH ou lancer une session terminal. Elles fonctionnent purement comme des ressources de routage sans serveur.",
+      "infoPing": "Pas de Ping Direct : Les vraies passerelles NAT gérées ne répondent pas aux pings directs ou aux connexions de port elles-mêmes. Elles ignoreront tout trafic direct destiné à leurs adresses IP, mais elles transféreront avec succès le trafic de transit (comme les pings d'un serveur de sous-réseau privé vers 8.8.8.8)."
+    },
+    "explain": {
+      "title": "Qu'est-ce qu'une Passerelle NAT ?",
+      "para": "Une Passerelle NAT (Network Address Translation) permet aux instances d'un sous-réseau privé de se connecter à des services extérieurs à votre VPC (comme Internet public ou des API externes), mais empêche les services externes d'initier des connexions entrantes non sollicitées vers ces instances privées.",
+      "keyTitle": "Caractéristiques Clés",
+      "li1": "Accès Unidirectionnel : Garde les instances cachées et protégées des attaques Internet directes tout en leur permettant de télécharger des mises à jour/paquets.",
+      "li2": "Traduction d'Adresse Source : Remplace l'IP privée de l'instance cliente par l'IP publique de la passerelle NAT avant d'envoyer le paquet vers Internet.",
+      "li3": "Routage avec État (Stateful) : Mémorise la connexion sortante afin de pouvoir renvoyer correctement les paquets de réponse au client d'origine."
+    },
+    "guide": {
+      "title": "Guide de Configuration Étape par Étape",
+      "step1Title": "Placer le NAT dans un Sous-réseau Public :",
+      "step1Desc": "Déployez toujours votre nœud de Passerelle NAT dans un Sous-réseau Public (celui qui a une voie d'accès Internet active).",
+      "step2Title": "Router le Sous-réseau Public vers l'IGW :",
+      "step2Desc": "Dans la table de routage du Sous-réseau Public, vérifiez qu'il existe une règle sortante : 0.0.0.0/0 ➡️ cible igw.",
+      "step3Title": "Pointer le Sous-réseau Privé vers le NAT :",
+      "step3Desc": "Ouvrez la table de routage du Sous-réseau Privé. Ajoutez une nouvelle règle : 0.0.0.0/0 ➡️ cible",
+      "step4Title": "Vérification :",
+      "step4Desc": "Ouvrez le terminal de n'importe quel serveur dans votre Sous-réseau Privé. Exécutez ping -c 3 1.1.1.1. Le trafic passera par votre Passerelle NAT !"
+    },
+    "cheatsheet": {
+      "title": "Aide-mémoire d'Architecture VPC",
+      "th1": "Ressource",
+      "th2": "Placement de Sous-réseau",
+      "th3": "Méthode d'Accès Internet",
+      "row1Col1": "Passerelle Internet (IGW)",
+      "row1Col2": "Attachée à la bordure du VPC",
+      "row1Col3": "Relie directement les sous-réseaux publics à Internet public.",
+      "row2Col1": "Passerelle NAT",
+      "row2Col2": "Sous-réseau Public",
+      "row2Col3": "Agit comme intermédiaire pour les sous-réseaux privés. Nécessite une EIP attachée.",
+      "row3Col1": "Instances d'App / BD",
+      "row3Col2": "Sous-réseau Privé",
+      "row3Col3": "Ne peuvent accéder à Internet que si routées via une Passerelle NAT."
+    }
+  },
+  "lb": {
+    "title": " - Répartiteur de Charge (Load Balancer)",
+    "tabs": {
+      "details": "Détails & Config",
+      "explain": "Qu'est-ce qu'un Load Balancer ?",
+      "guide": "Guide de Routage",
+      "cheatsheet": "Test Local"
+    },
+    "details": {
+      "title": "Spécifications du Load Balancer",
+      "resourceName": "Nom de la Ressource :",
+      "typeLabel": "Type :",
+      "typeValue": "Load Balancer HTTP Nginx",
+      "statusLabel": "Statut :",
+      "active": "Actif / Disponible",
+      "offline": "Hors Ligne / Arrêté",
+      "ipLabel": "IP Privée :",
+      "pendingIp": "Attribution en attente...",
+      "portLabel": "Port Hôte Dynamique :",
+      "portValueMapped": "{{port}} (Mappé sur le port 80)",
+      "portValueNone": "Aucun (Nœud Arrêté)",
+      "endpointLabel": "Point de Terminaison Public :",
+      "endpointNone": "Aucun",
+      "routeTitle": "Configuration de Routage",
+      "algoLabel": "Algorithme d'Équilibrage de Charge :",
+      "algoRoundRobin": "Round Robin (Distribuer le trafic séquentiellement)",
+      "algoLeastConn": "Moindres Connexions (Router vers la cible avec le moins de connexions)",
+      "targetPortLabel": "Port Cible (sur les serveurs de destination) :",
+      "targetPortPlaceholder": "ex: 80, 3000, 5000",
+      "targetsLabel": "Serveurs du Groupe Cible (nœuds Ubuntu) :",
+      "noTargets": "Aucun serveur Ubuntu ciblable trouvé sur le réseau. Veuillez créer au moins un nœud de serveur Ubuntu.",
+      "targetIp": "IP : {{ip}} | Statut : {{state}}",
+      "targetOnline": "En Ligne",
+      "targetOffline": "Hors Ligne",
+      "pathRulesLabel": "Règles de Routage Basées sur le Chemin (ALB Listener) :",
+      "addRuleBtn": "+ Ajouter Règle",
+      "noRules": "Aucune règle de routage de chemin configurée. Par défaut, achemine tout le trafic (/) vers toutes les cibles sélectionnées.",
+      "pathPlaceholder": "/chemin (ex: /clinic)",
+      "chooseTarget": "-- Choisir une Cible --",
+      "targetAsg": "ASG",
+      "targetServer": "Serveur",
+      "deleteRuleBtn": "Supprimer",
+      "saveBtn": "Appliquer la Configuration",
+      "savingBtn": "Sauvegarde des modifications...",
+      "infoBoundary": "Limite de la Plateforme Gérée : Les Application Load Balancers sont entièrement gérés par la plateforme d'orchestration. L'accès direct au terminal SSH est désactivé."
+    },
+    "explain": {
+      "title": "Comprendre la Répartition de Charge",
+      "para": "Un Application Load Balancer (ALB) sert de point d'entrée unique pour le trafic client. Il agit comme un proxy inverse, distribuant les requêtes HTTP/HTTPS entrantes sur plusieurs serveurs cibles de votre parc backend.",
+      "keyTitle": "Avantages Clés :",
+      "li1": "Haute Disponibilité : Répartit la charge sur plusieurs nœuds de sorte que si un serveur tombe en panne, d'autres continuent de répondre aux requêtes.",
+      "li2": "Évolutivité : Permet de faire évoluer la capacité de l'application horizontalement en enregistrant simplement de nouveaux serveurs cibles.",
+      "li3": "Optimisation du Trafic : S'assure qu'aucun serveur unique ne devienne un goulot d'étranglement de performance.",
+      "algoTitle": "Algorithmes :",
+      "algo1": "Round Robin : Les requêtes sont transférées aux cibles de manière séquentielle. Idéal lorsque les capacités des cibles sont uniformes.",
+      "algo2": "Moindres Connexions : Route le trafic vers la cible avec le moins de connexions actives. Optimal pour les requêtes à longue durée d'exécution."
+    },
+    "guide": {
+      "title": "Flux de Trafic Entrant",
+      "para": "L'Application Load Balancer fonctionne à l'intérieur de votre VPC sur le sous-réseau public. Voici comment le trafic traverse le réseau :",
+      "step1Title": "Requête Client :",
+      "step1Desc": "Le client exécute curl ou navigue vers le point d'entrée public du load balancer :",
+      "step2Title": "Évaluation du Groupe de Sécurité :",
+      "step2Desc": "Le groupe de sécurité du Load Balancer évalue la requête entrante. Assurez-vous d'avoir une règle HTTP (Port 80) autorisant le trafic depuis 0.0.0.0/0 !",
+      "step3Title": "Proxy Inverse :",
+      "step3Desc": "Le serveur Nginx choisit une cible dans votre groupe cible actif selon l'algorithme sélectionné (Round Robin / Least Conn) et transfère la requête HTTP à l'adresse IP de la cible sur le port 80."
+    },
+    "cheatsheet": {
+      "title": "Test Local de la Répartition de Charge",
+      "para": "Pour observer l'équilibrage du trafic en action, suivez cette procédure de test :",
+      "step1Title": "Démarrer un serveur web sur les nœuds cibles :",
+      "step1Desc": "Ouvrez un terminal sur vos serveurs Ubuntu cibles et démarrez un simple écouteur web. Par exemple :",
+      "step1Note": "Créez un fichier index.html avec une étiquette unique sur chaque serveur cible afin de pouvoir distinguer quel serveur répond !",
+      "step2Title": "Vérifier les Règles du Groupe de Sécurité :",
+      "step2Desc": "Assurez-vous que le nœud Load Balancer possède une règle de Groupe de Sécurité autorisant le port TCP 80 depuis 0.0.0.0/0.",
+      "step3Title": "Envoyer des requêtes au Load Balancer :",
+      "step3Desc": "Depuis le terminal de votre ordinateur local, exécutez des requêtes curl à plusieurs reprises pour voir Nginx alterner entre les cibles :"
+    }
+  },
+  "asg": {
+    "title": " Configuration",
+    "tabs": {
+      "details": "Conception & Paramètres de mise à l'échelle",
+      "simulation": "Simulation & Grille en direct ({{count}})"
+    },
+    "details": {
+      "step1Title": "1. Source du Modèle de Lancement",
+      "step1Desc": "Sélectionnez un serveur Ubuntu parent à utiliser comme modèle de lancement de base pour les copies de réplicas ASG :",
+      "step1Label": "Sélectionner le Serveur Modèle",
+      "step1Select": "-- Sélectionner le serveur modèle --",
+      "pending": "en attente",
+      "step2Title": "2. Cibles de Sous-réseau VPC",
+      "step2Desc": "Choisissez les sous-réseaux où l'ASG peut déployer des serveurs réplicas :",
+      "step3Title": "3. Limites de Capacité d'Instance",
+      "minInstances": "Instances Min",
+      "maxInstances": "Instances Max",
+      "desiredInstances": "Instances Désirées",
+      "saveBtn": "Sauvegarder les modifications",
+      "savingBtn": "Sauvegarde...",
+      "stopBtn": "Arrêter",
+      "stoppingBtn": "Arrêt...",
+      "deployBtn": "Sauvegarder & Déployer",
+      "deployingBtn": "Déploiement..."
+    },
+    "simulation": {
+      "infoBanner": "La vérification d'auto-réparation Auto Scaling s'exécute toutes les 2s. Si une instance plante, une remplaçante sera lancée.",
+      "simTitle": "Simulateur Automatisé de Charge & Trafic",
+      "simDesc": "Simulez des requêtes clients réelles. L'ASG s'adapte automatiquement (scale out) à >75% CPU et (scale in) à <35% CPU.",
+      "startSim": "Démarrer l'Auto-Simulation",
+      "stopSim": "Arrêter l'Auto-Simulation",
+      "simControl": "Contrôle de Simulation :",
+      "modeNormal": "Charge Normale",
+      "modeSpike": "Pic de Trafic (Scale Out)",
+      "modeSpikeTitle": "Augmenter rapidement la charge CPU",
+      "modeIdle": "Baisse de Trafic (Scale In)",
+      "modeIdleTitle": "Diminuer rapidement la charge CPU",
+      "simCpu": "Charge CPU Simulée :",
+      "simTraffic": "Trafic Entrant Simulé :",
+      "reqSec": "{{traffic}} req/sec",
+      "emptyStateTitle": "Aucun réplica actif déployé",
+      "emptyStateDesc": "Configurez le modèle et cliquez sur \"Sauvegarder & Déployer\" pour générer des réplicas.",
+      "healthy": "Sain",
+      "crashed": "Planté",
+      "resolving": "Résolution...",
+      "simulateFail": "Simuler une Panne",
+      "stoppingInstance": "Arrêt...",
+      "selfHealing": "Auto-réparation et remplacement..."
+    }
+  },
+  "terminal": {
+    "tabs": {
+      "terminal": "Terminal: {{nodeName}}",
+      "cheatsheet": "Aide-mémoire Linux"
+    },
+    "cheatsheet": {
+      "searchPlaceholder": "Rechercher commandes, descriptions ou mots-clés...",
+      "all": "Tout",
+      "empty": "Aucune commande correspondante trouvée.",
+      "example": "Exemple d'Utilisation",
+      "copied": "Copié !",
+      "copy": "Copier"
+    }
   }
 }

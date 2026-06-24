@@ -17,9 +17,381 @@
     "createSubmit": "Create Project",
     "deleteTitle": "Delete Project",
     "deleteConfirm": "Delete Project",
+    "deleteMessage": "This will permanently delete \"{{name}}\" and stop/remove all associated Docker containers. This action cannot be undone.",
     "noProjects": "No projects found. Create a new one!",
     "lastUpdated": "Last updated:",
     "open": "Open",
     "delete": "Delete"
+  },
+  "vpc": {
+    "titleInfo": "Project VPC Settings",
+    "titleSimulator": "VPC Traffic Routing Simulator",
+    "name": "VPC Name",
+    "namePlaceholder": "e.g. Primary VPC",
+    "cidr": "CIDR Block",
+    "description": "Description",
+    "descriptionPlaceholder": "Describe this VPC...",
+    "dns": "DNS Resolution Enabled",
+    "igw": "Internet Gateway (IGW) Attached",
+    "save": "Save Configurations",
+    "subnets": "Active Subnets",
+    "noSubnets": "No subnets exist in the VPC. Add subnets from the Node Library sidebar.",
+    "sourceNode": "Source Node",
+    "destNode": "Destination Node",
+    "selectSource": "-- Select Source --",
+    "selectDest": "-- Select Destination --",
+    "subnetLabel": "Subnet: ",
+    "noSubnetLabel": "No Subnet",
+    "destPort": "Dest Port",
+    "testComm": "Test Packet Communication"
+  },
+  "sg": {
+    "title": "Security Group:",
+    "description": "Security groups act as a virtual firewall for your container instance to control inbound and outbound traffic. By default, all traffic that is not explicitly allowed is denied.",
+    "activeRules": "Active Traffic Rules",
+    "direction": "Direction",
+    "action": "Action",
+    "protocol": "Protocol",
+    "port": "Port",
+    "sourceDest": "Source / Dest",
+    "nodeLabel": "Node: ",
+    "subnetLabel": "Subnet: ",
+    "noRules": "No rules configured. All traffic is blocked.",
+    "addRuleTitle": "Add Rule",
+    "inbound": "Inbound",
+    "outbound": "Outbound",
+    "portRange": "Port Range",
+    "portPlaceholder": "e.g. 80, 5432, ALL",
+    "sourceDestLabel": "Source / Destination",
+    "anywhere": "Anywhere (0.0.0.0/0)",
+    "subnetsGroup": "Subnets",
+    "nodesGroup": "Nodes",
+    "addRuleBtn": "Add Rule"
+  },
+  "routing": {
+    "title": " - Routing Table",
+    "description": "A Routing Table contains a set of rules (called routes) that determine where network traffic from your subnet is directed. Traffic matching the destination CIDR will be forwarded to the corresponding target.",
+    "destCidr": "Destination CIDR",
+    "target": "Target",
+    "desc": "Description",
+    "action": "Action",
+    "remove": "Remove",
+    "noRoutes": "No routes defined. Subnet traffic will be isolated.",
+    "addTitle": "Add Route Rule",
+    "cidrPlaceholder": "e.g. 0.0.0.0/0, 10.0.0.0/16",
+    "descPlaceholder": "Rule description (optional)",
+    "addBtn": "Add Route",
+    "saving": "Saving Changes...",
+    "save": "Save Changes"
+  },
+  "postgres": {
+    "tabs": {
+      "details": "Details & Config",
+      "simulation": "Simulation",
+      "explorer": "Database Explorer",
+      "shell": "SQL Shell",
+      "cheatsheet": "SQL Cheat Sheet"
+    },
+    "details": {
+      "title": "Database Scaling & Parameters",
+      "desc": "Configure vertical container limits and horizontal database replication parameters.",
+      "verticalTitle": "Vertical Resource Controls",
+      "cpuLabel": "CPU Core Limit",
+      "ramLabel": "RAM Limit",
+      "storageLabel": "Storage Capacity",
+      "applyBtn": "Apply Resource Changes",
+      "applyingBtn": "Applying Resource Changes...",
+      "sysStatus": "System Status:",
+      "horizontalTitle": "Horizontal Scaling & Partitioning",
+      "replicaLabel": "Replica Pool Size",
+      "partitionsLabel": "Table Partitions",
+      "scaleDesc": "Replicas scale reads. Partitions divide large datasets (e.g. users) horizontally into sub-tables (p0 to p4) for optimized search performance.",
+      "topologyTitle": "Topology Note",
+      "topologyDesc": "Replication uses log-shipping. Replicas act as read-only copies. Primary failures stop writes, but read queries remain available on active replicas."
+    },
+    "simulation": {
+      "title": "Database Traffic & Failover Dashboard",
+      "desc": "Generate traffic and test database high-availability scenarios.",
+      "startBtn": "Start Simulation",
+      "pauseBtn": "Pause Traffic",
+      "crashBtn": "Crash Primary",
+      "recoverBtn": "Recover Primary",
+      "promoteBtn": "Promote Replica",
+      "reads": "Reads Handled",
+      "writes": "Writes Handled",
+      "errors": "Errors / Failures",
+      "logTitle": "Simulated Event Log"
+    },
+    "explorer": {
+      "title": "Inspect tables and schema: ",
+      "initializing": "Database server is initializing... This may take a few seconds.",
+      "retryBtn": "Retry Schema Scan",
+      "viewDataBtn": "View Data",
+      "noPublicTables": "No public tables found."
+    },
+    "shell": {
+      "targetDb": "Target Database:",
+      "executeBtn": "Execute Query",
+      "executingBtn": "Running...",
+      "placeholder": "Write your SQL statements here...",
+      "consoleTitle": "Output Console",
+      "emptyOutput": "No output. Execute a query to see result tables."
+    },
+    "cheatsheet": {
+      "placeholder": "Search SQL commands or concepts..."
+    }
+  },
+  "nosql": {
+    "tabs": {
+      "details": "Details & Config",
+      "simulation": "Simulation",
+      "explorer": "NoSQL Explorer",
+      "shell": "Mongo Shell",
+      "cheatsheet": "Mongo Cheat Sheet"
+    },
+    "details": {
+      "title": "NoSQL Database Configuration",
+      "desc": "Manage vertical resources and partition horizontal database shards.",
+      "verticalTitle": "Vertical Limits",
+      "cpuLabel": "CPU Core Limit",
+      "ramLabel": "Memory Limit",
+      "storageLabel": "Storage Capacity",
+      "applyBtn": "Apply Resource Changes",
+      "applyingBtn": "Applying Resource Changes...",
+      "sysStatus": "System Status:",
+      "horizontalTitle": "Horizontal Scaling & Replication",
+      "shardsLabel": "Shard Partitions",
+      "replicaLabel": "Replica Members",
+      "scaleDesc": "Shards partition collections horizontally using hash keys. Replicas provide high availability and read scalability for each shard partition.",
+      "topologyTitle": "Architecture Note",
+      "topologyDesc": "MongoDB sharding uses mongos as the query router. Each shard can be a replica set. Replicas synchronize data asynchronously via oplog tailing."
+    },
+    "simulation": {
+      "title": "MongoDB Sharding Router Simulation",
+      "desc": "Observe request hashing and eventual consistency secondary replication lag.",
+      "startBtn": "Start Simulation",
+      "pauseBtn": "Pause Traffic",
+      "crashBtn": "Crash Shard",
+      "recoverBtn": "Recover Shard",
+      "routed": "Routed Queries",
+      "stale": "Stale Reads Logged",
+      "logTitle": "Simulated Event Log"
+    },
+    "explorer": {
+      "title": "Inspect collections and documents: ",
+      "initializing": "Database server is initializing... This may take a few seconds.",
+      "retryBtn": "Retry Schema Scan",
+      "viewDataBtn": "View Documents",
+      "noCollections": "No collections found."
+    },
+    "shell": {
+      "executeBtn": "Evaluate Query",
+      "executingBtn": "Running...",
+      "placeholder": "Write your MongoDB commands here (e.g. db.users.find())",
+      "consoleTitle": "Output Console",
+      "emptyOutput": "No output. Execute a query to see result documents."
+    },
+    "cheatsheet": {
+      "placeholder": "Search Mongo commands or concepts..."
+    }
+  },
+  "nat": {
+    "title": " - Managed NAT Gateway",
+    "tabs": {
+      "details": "Details",
+      "explain": "What is a NAT?",
+      "guide": "Setup Guide",
+      "cheatsheet": "Cheat Sheet"
+    },
+    "details": {
+      "title": "Gateway Specifications (Cloud Simulator)",
+      "resourceName": "Resource Name:",
+      "typeLabel": "Type:",
+      "typeValue": "Managed NAT Gateway (AWS Style)",
+      "statusLabel": "Status:",
+      "active": "Active / Available",
+      "offline": "Offline / Stopped",
+      "ipLabel": "Public IP Address:",
+      "pendingIp": "Pending allocation...",
+      "infoCloud": "Cloud Standard: In real clouds (AWS, GCP, Azure), NAT Gateways are fully managed services. Users cannot SSH or launch a terminal session on them. They operate purely as serverless routing assets.",
+      "infoPing": "No Direct Pings: Real managed NAT Gateways do not respond to direct pings or port connections themselves. They will drop any direct traffic destined for their IP addresses, but they will successfully forward transit traffic (like pings from a private subnet server to 8.8.8.8)."
+    },
+    "explain": {
+      "title": "What is a NAT Gateway?",
+      "para": "A NAT (Network Address Translation) Gateway allows instances in a private subnet to connect to services outside your VPC (like the public internet or external APIs), but prevents external services from initiating unsolicited inbound connections with those private instances.",
+      "keyTitle": "Key Characteristics",
+      "li1": "One-Way Access: Keeps instances hidden and protected from direct internet attacks while allowing them to download updates/packages.",
+      "li2": "Source Address Translation: Replaces the client instance's private IP with the NAT Gateway's public IP before sending the packet to the internet.",
+      "li3": "Stateful Routing: Remembers the outgoing connection so it can correctly return response packets back to the original client."
+    },
+    "guide": {
+      "title": "Step-by-Step Configuration Guide",
+      "step1Title": "Place NAT in Public Subnet:",
+      "step1Desc": "Always deploy your NAT Gateway node in a Public Subnet (one that has an active internet pathway).",
+      "step2Title": "Route Public Subnet to IGW:",
+      "step2Desc": "In the Public Subnet routing table, verify there is an outbound rule: 0.0.0.0/0 ➡️ target igw.",
+      "step3Title": "Point Private Subnet to NAT:",
+      "step3Desc": "Open the Private Subnet's routing table modal. Add a new route rule: 0.0.0.0/0 ➡️ target",
+      "step4Title": "Verification:",
+      "step4Desc": "Open the terminal of any client server in your Private Subnet. Run ping -c 3 1.1.1.1. The traffic will route through your NAT Gateway!"
+    },
+    "cheatsheet": {
+      "title": "VPC Architecture Cheat Sheet",
+      "th1": "Resource",
+      "th2": "Subnet Placement",
+      "th3": "Internet Access Method",
+      "row1Col1": "Internet Gateway (IGW)",
+      "row1Col2": "Attached to VPC edge",
+      "row1Col3": "Bridges public subnets to public internet directly.",
+      "row2Col1": "NAT Gateway",
+      "row2Col2": "Public Subnet",
+      "row2Col3": "Acts as middleman for private subnets. Needs an attached EIP.",
+      "row3Col1": "App Instances / DBs",
+      "row3Col2": "Private Subnet",
+      "row3Col3": "Can only access internet if routed through a NAT Gateway."
+    }
+  },
+  "lb": {
+    "title": " - Application Load Balancer",
+    "tabs": {
+      "details": "Details & Config",
+      "explain": "What is a Load Balancer?",
+      "guide": "Routing Guide",
+      "cheatsheet": "Local Testing"
+    },
+    "details": {
+      "title": "Load Balancer Specifications",
+      "resourceName": "Resource Name:",
+      "typeLabel": "Type:",
+      "typeValue": "Nginx HTTP Load Balancer",
+      "statusLabel": "Status:",
+      "active": "Active / Available",
+      "offline": "Offline / Stopped",
+      "ipLabel": "Private IP:",
+      "pendingIp": "Pending allocation...",
+      "portLabel": "Dynamic Host Port:",
+      "portValueMapped": "{{port}} (Mapped to port 80)",
+      "portValueNone": "None (Node Stopped)",
+      "endpointLabel": "Public Endpoint:",
+      "endpointNone": "None",
+      "routeTitle": "Routing Configuration",
+      "algoLabel": "Load Balancing Algorithm:",
+      "algoRoundRobin": "Round Robin (Distribute traffic sequentially)",
+      "algoLeastConn": "Least Connections (Route to target with fewest connections)",
+      "targetPortLabel": "Target Port (on destination servers):",
+      "targetPortPlaceholder": "e.g. 80, 3000, 5000",
+      "targetsLabel": "Target Group Servers (Ubuntu nodes):",
+      "noTargets": "No targetable Ubuntu servers found in the network. Please create at least one Ubuntu server node.",
+      "targetIp": "IP: {{ip}} | Status: {{state}}",
+      "targetOnline": "Online",
+      "targetOffline": "Offline",
+      "pathRulesLabel": "Path-Based Routing Rules (ALB Listener):",
+      "addRuleBtn": "+ Add Rule",
+      "noRules": "No path routing rules configured. Defaults to routing all traffic (/) to all selected targets.",
+      "pathPlaceholder": "/path (e.g. /clinic)",
+      "chooseTarget": "-- Choose Target --",
+      "targetAsg": "ASG",
+      "targetServer": "Server",
+      "deleteRuleBtn": "Delete",
+      "saveBtn": "Apply Configuration",
+      "savingBtn": "Saving changes...",
+      "infoBoundary": "Managed Platform Boundary: Application Load Balancers are fully managed by the orchestration platform. Direct SSH terminal access is disabled."
+    },
+    "explain": {
+      "title": "Understanding Load Balancing",
+      "para": "An Application Load Balancer (ALB) serves as a single entry point for client traffic. It acts as a reverse proxy, distributing incoming HTTP/HTTPS requests across multiple target servers in your backend fleet.",
+      "keyTitle": "Key Benefits:",
+      "li1": "High Availability: Spreads load across multiple nodes so that if one server fails, others continue serving requests.",
+      "li2": "Scalability: Allows scaling the application capacity horizontally by simply registering new target servers.",
+      "li3": "Traffic Optimization: Ensures that no single server becomes a performance bottleneck.",
+      "algoTitle": "Algorithms:",
+      "algo1": "Round Robin: Requests are forwarded to targets sequentially. Ideal when target capacities are uniform.",
+      "algo2": "Least Connections: Routes traffic to the target with the fewest active connections. Optimal for longer-running requests."
+    },
+    "guide": {
+      "title": "Inbound Traffic Flow",
+      "para": "The Application Load Balancer functions inside your VPC on the public subnet. Here is how traffic traverses the network:",
+      "step1Title": "Client Request:",
+      "step1Desc": "The client curls or browses to the load balancer's public entrypoint:",
+      "step2Title": "Security Group Evaluation:",
+      "step2Desc": "The Load Balancer security group evaluates the inbound request. Ensure you have an HTTP (Port 80) rule permitting traffic from 0.0.0.0/0!",
+      "step3Title": "Reverse Proxy:",
+      "step3Desc": "The Nginx server picks a target from your active target group according to the selected algorithm (Round Robin / Least Conn) and forwards the HTTP request to the target's IP address on port 80."
+    },
+    "cheatsheet": {
+      "title": "Testing Load Balancing Locally",
+      "para": "To observe traffic balancing in action, follow this testing procedure:",
+      "step1Title": "Start a web server on target nodes:",
+      "step1Desc": "Open a terminal on your target Ubuntu servers and start a simple web listener. For instance:",
+      "step1Note": "Create a file index.html with a unique label on each target server so you can distinguish which server is replying!",
+      "step2Title": "Verify Security Group Rules:",
+      "step2Desc": "Ensure the Load Balancer node has a Security Group rule allowing TCP port 80 from 0.0.0.0/0.",
+      "step3Title": "Send requests to the Load Balancer:",
+      "step3Desc": "From your local computer terminal, run curl requests repeatedly to see Nginx cycle between targets:"
+    }
+  },
+  "asg": {
+    "title": " Configuration",
+    "tabs": {
+      "details": "Design & Scaling settings",
+      "simulation": "Simulation & Live Grid ({{count}})"
+    },
+    "details": {
+      "step1Title": "1. Launch Template Source",
+      "step1Desc": "Select a parent Ubuntu server to use as the golden launch template for ASG scaling replica copies:",
+      "step1Label": "Select Template Server",
+      "step1Select": "-- Select template server --",
+      "pending": "pending",
+      "step2Title": "2. VPC Subnet Targets",
+      "step2Desc": "Choose the subnets where the ASG can deploy scaling replica servers:",
+      "step3Title": "3. Instance Capacity Limits",
+      "minInstances": "Min Instances",
+      "maxInstances": "Max Instances",
+      "desiredInstances": "Desired Instances",
+      "saveBtn": "Save Changes",
+      "savingBtn": "Saving...",
+      "stopBtn": "Stop",
+      "stoppingBtn": "Stopping...",
+      "deployBtn": "Save & Deploy",
+      "deployingBtn": "Deploying..."
+    },
+    "simulation": {
+      "infoBanner": "Auto Scaling self-healing check runs every 2s. If an instance is crashed, a replacement will launch.",
+      "simTitle": "Automated Load & Traffic Simulator",
+      "simDesc": "Simulate real-world client requests. ASG automatically scales out at >75% CPU and scales in at <35% CPU.",
+      "startSim": "Start Auto-Simulation",
+      "stopSim": "Stop Auto-Simulation",
+      "simControl": "Simulation Control:",
+      "modeNormal": "Normal Load",
+      "modeSpike": "Spike Traffic (Scale Out)",
+      "modeSpikeTitle": "Spike CPU load up fast",
+      "modeIdle": "Drop Traffic (Scale In)",
+      "modeIdleTitle": "Drop CPU load down fast",
+      "simCpu": "Simulated CPU Load:",
+      "simTraffic": "Simulated Incoming Traffic:",
+      "reqSec": "{{traffic}} req/sec",
+      "emptyStateTitle": "No active replicas deployed",
+      "emptyStateDesc": "Setup template configuration and click \"Save & Deploy\" to spawn replicas.",
+      "healthy": "Healthy",
+      "crashed": "Crashed",
+      "resolving": "Resolving...",
+      "simulateFail": "Simulate Failure",
+      "stoppingInstance": "Stopping...",
+      "selfHealing": "Self-healing auto-replacing..."
+    }
+  },
+  "terminal": {
+    "tabs": {
+      "terminal": "Terminal: {{nodeName}}",
+      "cheatsheet": "Linux Cheat Sheet"
+    },
+    "cheatsheet": {
+      "searchPlaceholder": "Search commands, descriptions, or keywords...",
+      "all": "All",
+      "empty": "No matching commands found.",
+      "example": "Example Usage",
+      "copied": "Copied!",
+      "copy": "Copy"
+    }
   }
 }

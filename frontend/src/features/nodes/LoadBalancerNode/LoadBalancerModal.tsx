@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, GitFork, BookOpen, ListOrdered, ShieldAlert, Cpu, Save, ArrowRight } from 'lucide-react';
 
 interface TargetNode {
@@ -49,6 +50,7 @@ export default function LoadBalancerModal({
   onClose,
   onSaveConfig
 }: LoadBalancerModalProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'details' | 'explain' | 'guide' | 'cheatsheet'>('details');
   const [algorithm, setAlgorithm] = useState<'round_robin' | 'least_conn'>(config?.loadBalancerAlgorithm || 'round_robin');
   const [targetPort, setTargetPort] = useState<number>(config?.loadBalancerTargetPort || 80);
@@ -110,7 +112,7 @@ export default function LoadBalancerModal({
         <div style={styles.header}>
           <div style={styles.titleRow}>
             <GitFork size={18} color="#EF4444" />
-            <span style={styles.title}>{nodeName} - Application Load Balancer</span>
+            <span style={styles.title}>{nodeName}{t('lb.title')}</span>
           </div>
           <button onClick={onClose} style={styles.closeBtn}>
             <X size={18} />
@@ -123,25 +125,25 @@ export default function LoadBalancerModal({
             style={activeTab === 'details' ? styles.tabActive : styles.tab} 
             onClick={() => setActiveTab('details')}
           >
-            <Cpu size={14} /> Details & Config
+            <Cpu size={14} /> {t('lb.tabs.details')}
           </button>
           <button 
             style={activeTab === 'explain' ? styles.tabActive : styles.tab} 
             onClick={() => setActiveTab('explain')}
           >
-            <BookOpen size={14} /> What is a Load Balancer?
+            <BookOpen size={14} /> {t('lb.tabs.explain')}
           </button>
           <button 
             style={activeTab === 'guide' ? styles.tabActive : styles.tab} 
             onClick={() => setActiveTab('guide')}
           >
-            <ListOrdered size={14} /> Routing Guide
+            <ListOrdered size={14} /> {t('lb.tabs.guide')}
           </button>
           <button 
             style={activeTab === 'cheatsheet' ? styles.tabActive : styles.tab} 
             onClick={() => setActiveTab('cheatsheet')}
           >
-            <ShieldAlert size={14} /> Local Testing
+            <ShieldAlert size={14} /> {t('lb.tabs.cheatsheet')}
           </button>
         </div>
 
@@ -149,59 +151,59 @@ export default function LoadBalancerModal({
           {/* Tab 1: Live Details & Target Config */}
           {activeTab === 'details' && (
             <div style={styles.content}>
-              <h4 style={styles.sectionTitle}>Load Balancer Specifications</h4>
+              <h4 style={styles.sectionTitle}>{t('lb.details.title')}</h4>
               <div style={styles.grid}>
                 <div style={styles.gridItem}>
-                  <span style={styles.label}>Resource Name:</span>
+                  <span style={styles.label}>{t('lb.details.resourceName')}</span>
                   <span style={styles.value}>{nodeName}</span>
                 </div>
                 <div style={styles.gridItem}>
-                  <span style={styles.label}>Type:</span>
-                  <span style={styles.value}>Nginx HTTP Load Balancer</span>
+                  <span style={styles.label}>{t('lb.details.typeLabel')}</span>
+                  <span style={styles.value}>{t('lb.details.typeValue')}</span>
                 </div>
                 <div style={styles.gridItem}>
-                  <span style={styles.label}>Status:</span>
+                  <span style={styles.label}>{t('lb.details.statusLabel')}</span>
                   <span style={{ 
                     ...styles.value, 
                     color: state === 'running' ? '#10B981' : '#EF4444',
                     fontWeight: 'bold' 
                   }}>
-                    {state === 'running' ? 'Active / Available' : 'Offline / Stopped'}
+                    {state === 'running' ? t('lb.details.active') : t('lb.details.offline')}
                   </span>
                 </div>
                 <div style={styles.gridItem}>
-                  <span style={styles.label}>Private IP:</span>
-                  <span style={{ ...styles.value, fontWeight: 'bold' }}>{ipAddress || 'Pending allocation...'}</span>
+                  <span style={styles.label}>{t('lb.details.ipLabel')}</span>
+                  <span style={{ ...styles.value, fontWeight: 'bold' }}>{ipAddress || t('lb.details.pendingIp')}</span>
                 </div>
                 <div style={styles.gridItem}>
-                  <span style={styles.label}>Dynamic Host Port:</span>
+                  <span style={styles.label}>{t('lb.details.portLabel')}</span>
                   <span style={{ ...styles.value, fontWeight: 'bold', color: '#3B82F6' }}>
-                    {port ? `${port} (Mapped to port 80)` : 'None (Node Stopped)'}
+                    {port ? t('lb.details.portValueMapped').replace('{{port}}', port) : t('lb.details.portValueNone')}
                   </span>
                 </div>
                 <div style={styles.gridItem}>
-                  <span style={styles.label}>Public Endpoint:</span>
+                  <span style={styles.label}>{t('lb.details.endpointLabel')}</span>
                   <span style={{ ...styles.value, color: '#3B82F6', fontWeight: 600 }}>
-                    {port ? `http://localhost:${port}` : 'None'}
+                    {port ? `http://localhost:${port}` : t('lb.details.endpointNone')}
                   </span>
                 </div>
               </div>
 
-              <h4 style={{ ...styles.sectionTitle, marginTop: '16px' }}>Routing Configuration</h4>
+              <h4 style={{ ...styles.sectionTitle, marginTop: '16px' }}>{t('lb.details.routeTitle')}</h4>
               <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Load Balancing Algorithm:</label>
+                <label style={styles.formLabel}>{t('lb.details.algoLabel')}</label>
                 <select 
                   value={algorithm} 
                   onChange={(e) => setAlgorithm(e.target.value as 'round_robin' | 'least_conn')}
                   style={styles.select}
                 >
-                  <option value="round_robin">Round Robin (Distribute traffic sequentially)</option>
-                  <option value="least_conn">Least Connections (Route to target with fewest connections)</option>
+                  <option value="round_robin">{t('lb.details.algoRoundRobin')}</option>
+                  <option value="least_conn">{t('lb.details.algoLeastConn')}</option>
                 </select>
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Target Port (on destination servers):</label>
+                <label style={styles.formLabel}>{t('lb.details.targetPortLabel')}</label>
                 <input
                   type="number"
                   min="1"
@@ -209,15 +211,15 @@ export default function LoadBalancerModal({
                   value={targetPort}
                   onChange={(e) => setTargetPort(parseInt(e.target.value, 10) || 80)}
                   style={styles.select}
-                  placeholder="e.g. 80, 3000, 5000"
+                  placeholder={t('lb.details.targetPortPlaceholder')}
                 />
               </div>
 
               <div style={styles.formGroup}>
-                <label style={styles.formLabel}>Target Group Servers (Ubuntu nodes):</label>
+                <label style={styles.formLabel}>{t('lb.details.targetsLabel')}</label>
                 {targetNodes.length === 0 ? (
                   <div style={styles.noNodesMessage}>
-                    No targetable Ubuntu servers found in the network. Please create at least one Ubuntu server node.
+                    {t('lb.details.noTargets')}
                   </div>
                 ) : (
                   <div style={styles.targetsList}>
@@ -234,7 +236,7 @@ export default function LoadBalancerModal({
                             {node.name}
                           </span>
                           <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                            IP: {node.ip || 'No IP'} | Status: {node.state}
+                            {t('lb.details.targetIp').replace('{{ip}}', node.ip || 'No IP').replace('{{state}}', node.state)}
                           </span>
                         </div>
                         <span style={{
@@ -244,7 +246,7 @@ export default function LoadBalancerModal({
                           backgroundColor: node.state === 'running' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
                           color: node.state === 'running' ? '#10B981' : '#EF4444',
                         }}>
-                          {node.state === 'running' ? 'Online' : 'Offline'}
+                          {node.state === 'running' ? t('lb.details.targetOnline') : t('lb.details.targetOffline')}
                         </span>
                       </label>
                     ))}
@@ -254,7 +256,7 @@ export default function LoadBalancerModal({
 
               <div style={{ marginTop: '16px', borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '16px', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                  <label style={{ ...styles.formLabel, fontWeight: 'bold', margin: 0 }}>Path-Based Routing Rules (ALB Listener):</label>
+                  <label style={{ ...styles.formLabel, fontWeight: 'bold', margin: 0 }}>{t('lb.details.pathRulesLabel')}</label>
                   <button 
                     onClick={handleAddRule}
                     style={{
@@ -268,12 +270,12 @@ export default function LoadBalancerModal({
                       cursor: 'pointer'
                     }}
                   >
-                    + Add Rule
+                    {t('lb.details.addRuleBtn')}
                   </button>
                 </div>
                 {routingRules.length === 0 ? (
                   <div style={{ ...styles.noNodesMessage, padding: '8px 12px', fontSize: '11px' }}>
-                    No path routing rules configured. Defaults to routing all traffic (/) to all selected targets.
+                    {t('lb.details.noRules')}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -283,7 +285,7 @@ export default function LoadBalancerModal({
                           type="text"
                           value={rule.path}
                           onChange={(e) => handleRulePathChange(idx, e.target.value)}
-                          placeholder="/path (e.g. /clinic)"
+                          placeholder={t('lb.details.pathPlaceholder')}
                           style={{ ...styles.select, flex: 1, padding: '4px 8px', fontSize: '12px' }}
                         />
                         <ArrowRight size={14} color="#6B7280" />
@@ -292,9 +294,9 @@ export default function LoadBalancerModal({
                           onChange={(e) => handleRuleTargetChange(idx, e.target.value)}
                           style={{ ...styles.select, flex: 1.5, padding: '4px 8px', fontSize: '12px' }}
                         >
-                          <option value="">-- Choose Target --</option>
-                          {targetNodes.map(t => (
-                            <option key={t.id} value={t.id}>{t.name} ({t.type === 'autoscalinggroup' ? 'ASG' : 'Server'})</option>
+                          <option value="">{t('lb.details.chooseTarget')}</option>
+                          {targetNodes.map(tNode => (
+                            <option key={tNode.id} value={tNode.id}>{tNode.name} ({tNode.type === 'autoscalinggroup' ? t('lb.details.targetAsg') : t('lb.details.targetServer')})</option>
                           ))}
                         </select>
                         <button
@@ -310,7 +312,7 @@ export default function LoadBalancerModal({
                             fontWeight: 'bold'
                           }}
                         >
-                          Delete
+                          {t('lb.details.deleteRuleBtn')}
                         </button>
                       </div>
                     ))}
@@ -327,12 +329,12 @@ export default function LoadBalancerModal({
                 }}
               >
                 <Save size={16} />
-                {saving ? 'Saving changes...' : 'Apply Configuration'}
+                {saving ? t('lb.details.savingBtn') : t('lb.details.saveBtn')}
               </button>
 
               <div style={styles.infoBox}>
                 <p style={styles.infoText}>
-                  🚫 <strong>Managed Platform Boundary:</strong> Application Load Balancers are fully managed by the orchestration platform. Direct SSH terminal access is disabled.
+                  🚫 <strong>{t('lb.details.infoBoundary').split(':')[0]}:</strong> {t('lb.details.infoBoundary').split(':').slice(1).join(':')}
                 </p>
               </div>
             </div>
@@ -341,20 +343,20 @@ export default function LoadBalancerModal({
           {/* Tab 2: What is a Load Balancer */}
           {activeTab === 'explain' && (
             <div style={styles.content}>
-              <h4 style={styles.sectionTitle}>Understanding Load Balancing</h4>
+              <h4 style={styles.sectionTitle}>{t('lb.explain.title')}</h4>
               <p style={styles.para}>
-                An <strong>Application Load Balancer (ALB)</strong> serves as a single entry point for client traffic. It acts as a reverse proxy, distributing incoming HTTP/HTTPS requests across multiple target servers in your backend fleet.
+                {t('lb.explain.para').split('Application Load Balancer (ALB)')[0]}<strong>Application Load Balancer (ALB)</strong>{t('lb.explain.para').split('Application Load Balancer (ALB)')[1]}
               </p>
-              <h5 style={styles.subSectionTitle}>Key Benefits:</h5>
+              <h5 style={styles.subSectionTitle}>{t('lb.explain.keyTitle')}</h5>
               <ul style={styles.list}>
-                <li><strong>High Availability:</strong> Spreads load across multiple nodes so that if one server fails, others continue serving requests.</li>
-                <li><strong>Scalability:</strong> Allows scaling the application capacity horizontally by simply registering new target servers.</li>
-                <li><strong>Traffic Optimization:</strong> Ensures that no single server becomes a performance bottleneck.</li>
+                <li><strong>{t('lb.explain.li1').split(':')[0]}:</strong> {t('lb.explain.li1').split(':').slice(1).join(':')}</li>
+                <li><strong>{t('lb.explain.li2').split(':')[0]}:</strong> {t('lb.explain.li2').split(':').slice(1).join(':')}</li>
+                <li><strong>{t('lb.explain.li3').split(':')[0]}:</strong> {t('lb.explain.li3').split(':').slice(1).join(':')}</li>
               </ul>
-              <h5 style={styles.subSectionTitle}>Algorithms:</h5>
+              <h5 style={styles.subSectionTitle}>{t('lb.explain.algoTitle')}</h5>
               <ul style={styles.list}>
-                <li><strong>Round Robin:</strong> Requests are forwarded to targets sequentially. Ideal when target capacities are uniform.</li>
-                <li><strong>Least Connections:</strong> Routes traffic to the target with the fewest active connections. Optimal for longer-running requests.</li>
+                <li><strong>{t('lb.explain.algo1').split(':')[0]}:</strong> {t('lb.explain.algo1').split(':').slice(1).join(':')}</li>
+                <li><strong>{t('lb.explain.algo2').split(':')[0]}:</strong> {t('lb.explain.algo2').split(':').slice(1).join(':')}</li>
               </ul>
             </div>
           )}
@@ -362,27 +364,27 @@ export default function LoadBalancerModal({
           {/* Tab 3: Routing Guide */}
           {activeTab === 'guide' && (
             <div style={styles.content}>
-              <h4 style={styles.sectionTitle}>Inbound Traffic Flow</h4>
+              <h4 style={styles.sectionTitle}>{t('lb.guide.title')}</h4>
               <p style={styles.para}>
-                The Application Load Balancer functions inside your VPC on the public subnet. Here is how traffic traverses the network:
+                {t('lb.guide.para')}
               </p>
               <div style={styles.steps}>
                 <div style={styles.step}>
                   <div style={styles.stepNumber}>1</div>
                   <div style={styles.stepText}>
-                    <strong>Client Request:</strong> The client curls or browses to the load balancer's public entrypoint: <code>http://localhost:HOST_PORT</code>.
+                    <strong>{t('lb.guide.step1Title')}</strong> {t('lb.guide.step1Desc')} <code>http://localhost:HOST_PORT</code>.
                   </div>
                 </div>
                 <div style={styles.step}>
                   <div style={styles.stepNumber}>2</div>
                   <div style={styles.stepText}>
-                    <strong>Security Group Evaluation:</strong> The Load Balancer security group evaluates the inbound request. Ensure you have an HTTP (Port 80) rule permitting traffic from <code>0.0.0.0/0</code>!
+                    <strong>{t('lb.guide.step2Title')}</strong> {t('lb.guide.step2Desc')}
                   </div>
                 </div>
                 <div style={styles.step}>
                   <div style={styles.stepNumber}>3</div>
                   <div style={styles.stepText}>
-                    <strong>Reverse Proxy:</strong> The Nginx server picks a target from your active target group according to the selected algorithm (Round Robin / Least Conn) and forwards the HTTP request to the target's IP address on port 80.
+                    <strong>{t('lb.guide.step3Title')}</strong> {t('lb.guide.step3Desc')}
                   </div>
                 </div>
               </div>
@@ -392,29 +394,29 @@ export default function LoadBalancerModal({
           {/* Tab 4: Local Testing */}
           {activeTab === 'cheatsheet' && (
             <div style={styles.content}>
-              <h4 style={styles.sectionTitle}>Testing Load Balancing Locally</h4>
+              <h4 style={styles.sectionTitle}>{t('lb.cheatsheet.title')}</h4>
               <p style={styles.para}>
-                To observe traffic balancing in action, follow this testing procedure:
+                {t('lb.cheatsheet.para')}
               </p>
               <div style={styles.steps}>
                 <div style={styles.step}>
                   <div style={styles.stepNumber}>A</div>
                   <div style={styles.stepText}>
-                    <strong>Start a web server on target nodes:</strong> Open a terminal on your target Ubuntu servers and start a simple web listener. For instance:
+                    <strong>{t('lb.cheatsheet.step1Title')}</strong> {t('lb.cheatsheet.step1Desc')}
                     <pre style={styles.codeBlock}>python3 -m http.server 80 &</pre>
-                    Create a file <code>index.html</code> with a unique label on each target server so you can distinguish which server is replying!
+                    {t('lb.cheatsheet.step1Note')}
                   </div>
                 </div>
                 <div style={styles.step}>
                   <div style={styles.stepNumber}>B</div>
                   <div style={styles.stepText}>
-                    <strong>Verify Security Group Rules:</strong> Ensure the Load Balancer node has a Security Group rule allowing TCP port 80 from <code>0.0.0.0/0</code>.
+                    <strong>{t('lb.cheatsheet.step2Title')}</strong> {t('lb.cheatsheet.step2Desc')}
                   </div>
                 </div>
                 <div style={styles.step}>
                   <div style={styles.stepNumber}>C</div>
                   <div style={styles.stepText}>
-                    <strong>Send requests to the Load Balancer:</strong> From your local computer terminal, run curl requests repeatedly to see Nginx cycle between targets:
+                    <strong>{t('lb.cheatsheet.step3Title')}</strong> {t('lb.cheatsheet.step3Desc')}
                     <pre style={styles.codeBlock}>curl http://localhost:{port || 'HOST_PORT'}</pre>
                   </div>
                 </div>

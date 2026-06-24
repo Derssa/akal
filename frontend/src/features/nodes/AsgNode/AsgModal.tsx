@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Cpu, Server, AlertTriangle, RotateCw, Settings, Activity } from 'lucide-react';
 import { API_BASE } from '../../../shared/types';
 import type { ContainerData } from '../../../shared/types';
@@ -30,6 +31,7 @@ export default function AsgModal({
   onSaveConfig,
   onRefreshContainers
 }: AsgModalProps) {
+  const { t } = useTranslation();
   const asgData = config?.asgs?.[asgId] || {
     desiredCapacity: 1,
     minCapacity: 1,
@@ -328,7 +330,7 @@ export default function AsgModal({
         <div style={styles.header}>
           <div style={styles.titleRow}>
             <Cpu size={18} color="#EC4899" />
-            <span style={styles.title}>{nodeName} Configuration</span>
+            <span style={styles.title}>{nodeName}{t('asg.title')}</span>
           </div>
           <button onClick={onClose} style={styles.closeBtn}>
             <X size={18} />
@@ -341,13 +343,13 @@ export default function AsgModal({
             style={activeTab === 'details' ? styles.tabActive : styles.tab}
             onClick={() => setActiveTab('details')}
           >
-            <Settings size={14} /> Design & Scaling settings
+            <Settings size={14} /> {t('asg.tabs.details')}
           </button>
           <button
             style={activeTab === 'simulation' ? styles.tabActive : styles.tab}
             onClick={() => setActiveTab('simulation')}
           >
-            <Activity size={14} /> Simulation & Live Grid ({asgInstances.length})
+            <Activity size={14} /> {t('asg.tabs.simulation').replace('{{count}}', asgInstances.length.toString())}
           </button>
         </div>
 
@@ -357,20 +359,20 @@ export default function AsgModal({
               <div style={styles.grid2Col}>
                 {/* Launch Template select */}
                 <div style={styles.section}>
-                  <h3 style={styles.sectionTitle}>1. Launch Template Source</h3>
+                  <h3 style={styles.sectionTitle}>{t('asg.details.step1Title')}</h3>
                   <p style={{ fontSize: '11px', color: '#6B7280', marginBottom: '8px' }}>
-                    Select a parent Ubuntu server to use as the golden launch template for ASG scaling replica copies:
+                    {t('asg.details.step1Desc')}
                   </p>
                   <div style={{ marginTop: '12px' }}>
-                    <label style={styles.fieldLabel}>Select Template Server</label>
+                    <label style={styles.fieldLabel}>{t('asg.details.step1Label')}</label>
                     <select
                       value={parentId}
                       onChange={(e) => setParentId(e.target.value)}
                       style={styles.select}
                     >
-                      <option value="">-- Select template server --</option>
+                      <option value="">{t('asg.details.step1Select')}</option>
                       {availableTemplates.map(c => (
-                        <option key={c.id} value={c.id}>{c.name} ({config?.nodeIpMap?.[c.id] || c.ip || 'pending'})</option>
+                        <option key={c.id} value={c.id}>{c.name} ({config?.nodeIpMap?.[c.id] || c.ip || t('asg.details.pending')})</option>
                       ))}
                     </select>
                   </div>
@@ -378,9 +380,9 @@ export default function AsgModal({
 
                 {/* Subnet settings */}
                 <div style={styles.section}>
-                  <h3 style={styles.sectionTitle}>2. VPC Subnet Targets</h3>
+                  <h3 style={styles.sectionTitle}>{t('asg.details.step2Title')}</h3>
                   <p style={{ fontSize: '11px', color: '#6B7280', marginBottom: '8px' }}>
-                    Choose the subnets where the ASG can deploy scaling replica servers:
+                    {t('asg.details.step2Desc')}
                   </p>
                   <div style={styles.subnetList}>
                     {config?.subnets?.map((subnet: any) => (
@@ -403,10 +405,10 @@ export default function AsgModal({
 
               {/* Scaling values */}
               <div style={{ ...styles.section, marginTop: '16px' }}>
-                <h3 style={styles.sectionTitle}>3. Instance Capacity Limits</h3>
+                <h3 style={styles.sectionTitle}>{t('asg.details.step3Title')}</h3>
                 <div style={styles.capacityRow}>
                   <div style={styles.capacityField}>
-                    <label style={styles.fieldLabel}>Min Instances</label>
+                    <label style={styles.fieldLabel}>{t('asg.details.minInstances')}</label>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <button 
                         type="button" 
@@ -429,7 +431,7 @@ export default function AsgModal({
                     </div>
                   </div>
                   <div style={styles.capacityField}>
-                    <label style={styles.fieldLabel}>Max Instances</label>
+                    <label style={styles.fieldLabel}>{t('asg.details.maxInstances')}</label>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <button 
                         type="button" 
@@ -452,7 +454,7 @@ export default function AsgModal({
                     </div>
                   </div>
                   <div style={styles.capacityField}>
-                    <label style={styles.fieldLabel}>Desired Instances</label>
+                    <label style={styles.fieldLabel}>{t('asg.details.desiredInstances')}</label>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <button 
                         type="button" 
@@ -487,7 +489,7 @@ export default function AsgModal({
                         disabled={saving || !parentId || selectedSubnets.length === 0}
                         style={{ ...styles.actionBtn, backgroundColor: '#3B82F6' }}
                       >
-                        {saving ? 'Saving...' : 'Save Changes'}
+                        {saving ? t('asg.details.savingBtn') : t('asg.details.saveBtn')}
                       </button>
                     )}
                     <button
@@ -498,10 +500,10 @@ export default function AsgModal({
                       {stopping ? (
                         <>
                           <RotateCw size={14} className="spin" style={{ marginRight: '6px' }} />
-                          Stopping...
+                          {t('asg.details.stoppingBtn')}
                         </>
                       ) : (
-                        'Stop'
+                        t('asg.details.stopBtn')
                       )}
                     </button>
                   </div>
@@ -519,10 +521,10 @@ export default function AsgModal({
                     {deploying ? (
                       <>
                         <RotateCw size={14} className="spin" style={{ marginRight: '6px' }} />
-                        Deploying...
+                        {t('asg.details.deployingBtn')}
                       </>
                     ) : (
-                      'Save & Deploy'
+                      t('asg.details.deployBtn')
                     )}
                   </button>
                 )}
@@ -534,7 +536,7 @@ export default function AsgModal({
               <div style={styles.infoBanner}>
                 <Activity size={18} color="#3B82F6" />
                 <span style={{ fontSize: '12px', color: '#1E3A8A', fontWeight: '500' }}>
-                  Auto Scaling self-healing check runs every 2s. If an instance is crashed, a replacement will launch.
+                  {t('asg.simulation.infoBanner')}
                 </span>
               </div>
 
@@ -543,10 +545,10 @@ export default function AsgModal({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
                     <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#111827' }}>
-                      Automated Load & Traffic Simulator
+                      {t('asg.simulation.simTitle')}
                     </span>
                     <span style={{ fontSize: '11px', color: '#6B7280', marginTop: '2px' }}>
-                      Simulate real-world client requests. ASG automatically scales out at &gt;75% CPU and scales in at &lt;35% CPU.
+                      {t('asg.simulation.simDesc')}
                     </span>
                   </div>
                   <button
@@ -559,15 +561,15 @@ export default function AsgModal({
                       cursor: asgInstances.length === 0 ? 'not-allowed' : 'pointer',
                       padding: '6px 12px',
                     }}
-                    title={asgInstances.length === 0 ? 'Deploy the ASG configuration first to start simulation' : ''}
+                    title={asgInstances.length === 0 ? t('asg.simulation.emptyStateDesc') : ''}
                   >
-                    {isAutoSimulating ? 'Stop Auto-Simulation' : 'Start Auto-Simulation'}
+                    {isAutoSimulating ? t('asg.simulation.stopSim') : t('asg.simulation.startSim')}
                   </button>
                 </div>
                 {isAutoSimulating && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px', borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#4B5563' }}>Simulation Control:</span>
+                      <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#4B5563' }}>{t('asg.simulation.simControl')}</span>
                       <button
                         onClick={() => setSimulationMode('normal')}
                         style={{
@@ -581,7 +583,7 @@ export default function AsgModal({
                           color: simulationMode === 'normal' ? '#FFF' : '#374151'
                         }}
                       >
-                        Normal Load
+                        {t('asg.simulation.modeNormal')}
                       </button>
                       <button
                         onClick={() => setSimulationMode('spike')}
@@ -595,9 +597,9 @@ export default function AsgModal({
                           backgroundColor: simulationMode === 'spike' ? '#EF4444' : '#FFF',
                           color: simulationMode === 'spike' ? '#FFF' : '#EF4444'
                         }}
-                        title="Spike CPU load up fast"
+                        title={t('asg.simulation.modeSpikeTitle')}
                       >
-                        Spike Traffic (Scale Out)
+                        {t('asg.simulation.modeSpike')}
                       </button>
                       <button
                         onClick={() => setSimulationMode('idle')}
@@ -611,14 +613,14 @@ export default function AsgModal({
                           backgroundColor: simulationMode === 'idle' ? '#3B82F6' : '#FFF',
                           color: simulationMode === 'idle' ? '#FFF' : '#3B82F6'
                         }}
-                        title="Drop CPU load down fast"
+                        title={t('asg.simulation.modeIdleTitle')}
                       >
-                        Drop Traffic (Scale In)
+                        {t('asg.simulation.modeIdle')}
                       </button>
                     </div>
                     <div style={{ display: 'flex', gap: '24px' }}>
                       <div>
-                        <span style={{ fontSize: '11px', color: '#6B7280' }}>Simulated CPU Load:</span>
+                        <span style={{ fontSize: '11px', color: '#6B7280' }}>{t('asg.simulation.simCpu')}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
                           <div style={{ width: '80px', height: '8px', backgroundColor: '#E5E7EB', borderRadius: '4px', overflow: 'hidden' }}>
                             <div style={{ width: `${simulatedCpu}%`, height: '100%', backgroundColor: simulatedCpu > 75 ? '#EF4444' : simulatedCpu < 35 ? '#3B82F6' : '#10B981' }} />
@@ -627,9 +629,9 @@ export default function AsgModal({
                         </div>
                       </div>
                       <div>
-                        <span style={{ fontSize: '11px', color: '#6B7280' }}>Simulated Incoming Traffic:</span>
+                        <span style={{ fontSize: '11px', color: '#6B7280' }}>{t('asg.simulation.simTraffic')}</span>
                         <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#1F2937', marginTop: '2px' }}>
-                          {simulatedTraffic} req/sec
+                          {t('asg.simulation.reqSec').replace('{{traffic}}', simulatedTraffic.toString())}
                         </div>
                       </div>
                     </div>
@@ -643,10 +645,10 @@ export default function AsgModal({
                   <div style={styles.emptyState}>
                     <AlertTriangle size={24} color="#F59E0B" />
                     <span style={{ fontSize: '13px', color: '#4B5563', marginTop: '6px', fontWeight: 'bold' }}>
-                      No active replicas deployed
+                      {t('asg.simulation.emptyStateTitle')}
                     </span>
                     <span style={{ fontSize: '11px', color: '#9CA3AF' }}>
-                      Setup template configuration and click "Deploy Code Changes" to spawn replicas.
+                      {t('asg.simulation.emptyStateDesc')}
                     </span>
                   </div>
                 ) : (
@@ -680,12 +682,12 @@ export default function AsgModal({
                             borderRadius: '10px',
                             fontWeight: 'bold'
                           }}>
-                            {isRunning ? 'Healthy' : 'Crashed'}
+                            {isRunning ? t('asg.simulation.healthy') : t('asg.simulation.crashed')}
                           </span>
                         </div>
                         
                         <div style={{ fontSize: '11px', color: '#6B7280', margin: '6px 0' }}>
-                          <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}><strong>IP:</strong> {instance.ip || 'Resolving...'}</div>
+                          <div style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}><strong>IP:</strong> {instance.ip || t('asg.simulation.resolving')}</div>
                           {isAutoSimulating && isRunning && (
                             <div style={{ marginTop: '2px' }}>
                               <strong>CPU:</strong>{' '}
@@ -702,12 +704,12 @@ export default function AsgModal({
                             disabled={terminatingId === instance.id}
                             style={styles.killBtn}
                           >
-                            {terminatingId === instance.id ? 'Stopping...' : 'Simulate Failure'}
+                            {terminatingId === instance.id ? t('asg.simulation.stoppingInstance') : t('asg.simulation.simulateFail')}
                           </button>
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#EF4444', fontWeight: 'bold' }}>
                             <RotateCw size={12} className="spin" />
-                            Self-healing auto-replacing...
+                            {t('asg.simulation.selfHealing')}
                           </div>
                         )}
                       </div>

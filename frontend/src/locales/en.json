@@ -1,0 +1,25 @@
+{
+  "topbar": {
+    "vpcSettings": "VPC Settings",
+    "trafficSimulator": "Traffic Simulator",
+    "saveGraph": "Save Graph",
+    "backToProjects": "Back to Projects",
+    "refreshNodes": "Refresh Nodes"
+  },
+  "projects": {
+    "title": "Torollo Projects",
+    "subtitle": "Organize your infrastructure labs",
+    "newProject": "New Project",
+    "loading": "Loading projects...",
+    "createTitle": "Create Project Stack",
+    "createLabel": "Give your project a descriptive name to organize your containers.",
+    "createPlaceholder": "e.g. Web App Lab, API Gateway Test",
+    "createSubmit": "Create Project",
+    "deleteTitle": "Delete Project",
+    "deleteConfirm": "Delete Project",
+    "noProjects": "No projects found. Create a new one!",
+    "lastUpdated": "Last updated:",
+    "open": "Open",
+    "delete": "Delete"
+  }
+}

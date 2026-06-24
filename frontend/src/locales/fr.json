@@ -1,0 +1,25 @@
+{
+  "topbar": {
+    "vpcSettings": "Paramètres VPC",
+    "trafficSimulator": "Simulateur de Trafic",
+    "saveGraph": "Enregistrer le Graphe",
+    "backToProjects": "Retour aux Projets",
+    "refreshNodes": "Actualiser les Nœuds"
+  },
+  "projects": {
+    "title": "Projets Torollo",
+    "subtitle": "Organisez vos laboratoires d'infrastructure",
+    "newProject": "Nouveau Projet",
+    "loading": "Chargement des projets...",
+    "createTitle": "Créer un Projet",
+    "createLabel": "Donnez un nom descriptif à votre projet pour organiser vos conteneurs.",
+    "createPlaceholder": "ex: Lab App Web, Test API Gateway",
+    "createSubmit": "Créer le Projet",
+    "deleteTitle": "Supprimer le Projet",
+    "deleteConfirm": "Supprimer",
+    "noProjects": "Aucun projet trouvé. Créez-en un nouveau !",
+    "lastUpdated": "Dernière mise à jour :",
+    "open": "Ouvrir",
+    "delete": "Supprimer"
+  }
+}

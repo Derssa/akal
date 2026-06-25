@@ -56,30 +56,41 @@ function checkDocker() {
   }
 }
 
+// ANSI Colors
+const colors = {
+  reset: "\x1b[0m",
+  cyan: "\x1b[36m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  red: "\x1b[31m",
+  magenta: "\x1b[35m",
+  bold: "\x1b[1m"
+};
+
 if (command === 'start') {
-  console.log('[i] Checking system requirements...');
+  console.log(`${colors.cyan}[i] Checking system requirements...${colors.reset}`);
 
   if (!checkDocker()) {
-    console.error('\n[x] Error: Docker is not installed or not running on your machine.');
+    console.error(`\n${colors.red}${colors.bold}[x] Error: Docker is not installed or not running on your machine.${colors.reset}`);
     
     if (process.platform === 'win32') {
-      console.log('\n[!] WINDOWS DETECTED:');
+      console.log(`\n${colors.yellow}[!] WINDOWS DETECTED:${colors.reset}`);
       console.log('Please download and install Docker Desktop:');
-      console.log('[>] https://www.docker.com/products/docker-desktop/\n');
+      console.log(`${colors.cyan}[>] https://www.docker.com/products/docker-desktop/\n${colors.reset}`);
     } else if (process.platform === 'darwin') {
-      console.log('\n[!] MACOS DETECTED:');
+      console.log(`\n${colors.yellow}[!] MACOS DETECTED:${colors.reset}`);
       console.log('Please download and install Docker Desktop:');
-      console.log('[>] https://www.docker.com/products/docker-desktop/\n');
+      console.log(`${colors.cyan}[>] https://www.docker.com/products/docker-desktop/\n${colors.reset}`);
     } else {
-      console.log('\n[!] LINUX DETECTED:');
+      console.log(`\n${colors.yellow}[!] LINUX DETECTED:${colors.reset}`);
       console.log('Please install Docker using your package manager:');
-      console.log('[>] Run: curl -fsSL https://get.docker.com | sh\n');
+      console.log(`${colors.cyan}[>] Run: curl -fsSL https://get.docker.com | sh\n${colors.reset}`);
     }
     process.exit(1);
   }
 
-  console.log('[v] Docker is running.');
-  console.log('[>] Booting Torollo System Lab...\n');
+  console.log(`${colors.green}[v] Docker is running.${colors.reset}`);
+  console.log(`${colors.magenta}🚀 Booting Torollo System Lab...${colors.reset}\n`);
 
   const backendPath = path.join(__dirname, '../backend');
   const frontendPath = path.join(__dirname, '../frontend');
@@ -115,10 +126,10 @@ if (command === 'start') {
         stdio: 'ignore'
       });
 
-      console.log('================================================');
-      console.log('[*] Torollo System Lab is ready!');
-      console.log(`[>] Access it here: http://localhost:${frontendPort}`);
-      console.log('================================================\n');
+      console.log(`${colors.cyan}================================================${colors.reset}`);
+      console.log(`${colors.green}${colors.bold}[*] Torollo System Lab is ready!${colors.reset}`);
+      console.log(`${colors.cyan}[>] Access it here: ${colors.reset}${colors.bold}http://localhost:${frontendPort}${colors.reset}`);
+      console.log(`${colors.cyan}================================================${colors.reset}\n`);
 
       // Automatically open browser tab
       setTimeout(() => {

@@ -147,7 +147,7 @@ export default function SecurityGroupsModal({
                           </td>
                           <td style={styles.tdCode}><code>{rule.protocol || 'ALL'}</code></td>
                           <td style={styles.tdCode}><code>{rule.port}</code></td>
-                          <td style={styles.td}>{resolvedSource}</td>
+                          <td style={styles.tdSource} title={resolvedSource}>{resolvedSource}</td>
                           <td style={styles.tdAction}>
                             <div style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
                               <button
@@ -400,6 +400,15 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     color: 'var(--color-text-secondary)',
     whiteSpace: 'nowrap',
+  },
+  tdSource: {
+    padding: '8px 12px',
+    fontSize: '12px',
+    color: 'var(--color-text-secondary)',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: '180px',
   },
   tdCode: {
     padding: '8px 12px',

@@ -1192,8 +1192,17 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
 
         const updatedNodeSubnetMap = { ...networkConfig.nodeSubnetMap };
         delete updatedNodeSubnetMap[id];
+        
         const updatedSecurityGroups = { ...networkConfig.nodeSecurityGroups };
         delete updatedSecurityGroups[id];
+        
+        // Cascade delete: remove any rules in other nodes that target this deleted node
+        Object.keys(updatedSecurityGroups).forEach(nodeId => {
+          updatedSecurityGroups[nodeId] = updatedSecurityGroups[nodeId].filter(
+            rule => rule.source !== id
+          );
+        });
+
         const updatedNodeIpMap = { ...networkConfig.nodeIpMap || {} };
         delete updatedNodeIpMap[id];
         saveNetworkConfig({

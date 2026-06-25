@@ -57,29 +57,29 @@ function checkDocker() {
 }
 
 if (command === 'start') {
-  console.log('🔍 Checking system requirements...');
+  console.log('[i] Checking system requirements...');
 
   if (!checkDocker()) {
-    console.error('\n❌ Error: Docker is not installed or not running on your machine.');
+    console.error('\n[x] Error: Docker is not installed or not running on your machine.');
     
     if (process.platform === 'win32') {
-      console.log('\n👉 WINDOWS DETECTED:');
+      console.log('\n[!] WINDOWS DETECTED:');
       console.log('Please download and install Docker Desktop:');
-      console.log('🔗 https://www.docker.com/products/docker-desktop/\n');
+      console.log('[>] https://www.docker.com/products/docker-desktop/\n');
     } else if (process.platform === 'darwin') {
-      console.log('\n👉 MACOS DETECTED:');
+      console.log('\n[!] MACOS DETECTED:');
       console.log('Please download and install Docker Desktop:');
-      console.log('🔗 https://www.docker.com/products/docker-desktop/\n');
+      console.log('[>] https://www.docker.com/products/docker-desktop/\n');
     } else {
-      console.log('\n👉 LINUX DETECTED:');
+      console.log('\n[!] LINUX DETECTED:');
       console.log('Please install Docker using your package manager:');
-      console.log('💻 Run: curl -fsSL https://get.docker.com | sh\n');
+      console.log('[>] Run: curl -fsSL https://get.docker.com | sh\n');
     }
     process.exit(1);
   }
 
-  console.log('✅ Docker is running.');
-  console.log('🚀 Booting Torollo System Lab...\n');
+  console.log('[v] Docker is running.');
+  console.log('[>] Booting Torollo System Lab...\n');
 
   const backendPath = path.join(__dirname, '../backend');
   const frontendPath = path.join(__dirname, '../frontend');
@@ -116,8 +116,8 @@ if (command === 'start') {
       });
 
       console.log('================================================');
-      console.log('🎉 Torollo System Lab is ready!');
-      console.log(`🔗 Access it here: http://localhost:${frontendPort}`);
+      console.log('[*] Torollo System Lab is ready!');
+      console.log(`[>] Access it here: http://localhost:${frontendPort}`);
       console.log('================================================\n');
 
       // Automatically open browser tab

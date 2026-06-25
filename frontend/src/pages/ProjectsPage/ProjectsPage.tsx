@@ -48,7 +48,6 @@ export default function ProjectsPage({ onSelectProject }: ProjectsPageProps) {
   }, []);
 
   const handleCreateProject = async (name: string) => {
-    setShowCreateModal(false);
     try {
       const res = await fetch(`${API_BASE}/api/projects`, {
         method: 'POST',
@@ -60,6 +59,8 @@ export default function ProjectsPage({ onSelectProject }: ProjectsPageProps) {
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setShowCreateModal(false);
     }
   };
 

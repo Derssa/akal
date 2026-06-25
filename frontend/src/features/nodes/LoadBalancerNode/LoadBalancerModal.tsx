@@ -99,6 +99,7 @@ export default function LoadBalancerModal({
     setSaving(true);
     try {
       await onSaveConfig(algorithm, selectedTargets, targetPort, routingRules);
+      onClose();
     } catch (err) {
       console.error(err);
     } finally {

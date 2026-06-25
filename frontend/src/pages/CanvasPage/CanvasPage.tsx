@@ -1152,7 +1152,6 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       return;
     }
 
-    setShowCreateModal(false);
     const type = dropState?.type || 'ubuntu';
     const position = dropState?.position;
 
@@ -1167,8 +1166,12 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
       pendingSubnetIdRef.current = null;
     }
 
-    setDropState(null);
-    await createContainer(name, type, targetSubnetId);
+    try {
+      await createContainer(name, type, targetSubnetId);
+    } finally {
+      setShowCreateModal(false);
+      setDropState(null);
+    }
   };
 
   const handleCancelCreate = () => {
@@ -1180,24 +1183,28 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const handleDeleteConfirmed = async () => {
     if (!deleteTarget) return;
     const id = deleteTarget;
-    setDeleteTarget(null);
-    const success = await deleteContainer(id);
-    if (success) {
-      delete positionsRef.current[id];
-      localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(positionsRef.current));
+    
+    try {
+      const success = await deleteContainer(id);
+      if (success) {
+        delete positionsRef.current[id];
+        localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(positionsRef.current));
 
-      const updatedNodeSubnetMap = { ...networkConfig.nodeSubnetMap };
-      delete updatedNodeSubnetMap[id];
-      const updatedSecurityGroups = { ...networkConfig.nodeSecurityGroups };
-      delete updatedSecurityGroups[id];
-      const updatedNodeIpMap = { ...networkConfig.nodeIpMap || {} };
-      delete updatedNodeIpMap[id];
-      saveNetworkConfig({
-        ...networkConfig,
-        nodeSubnetMap: updatedNodeSubnetMap,
-        nodeSecurityGroups: updatedSecurityGroups,
-        nodeIpMap: updatedNodeIpMap
-      });
+        const updatedNodeSubnetMap = { ...networkConfig.nodeSubnetMap };
+        delete updatedNodeSubnetMap[id];
+        const updatedSecurityGroups = { ...networkConfig.nodeSecurityGroups };
+        delete updatedSecurityGroups[id];
+        const updatedNodeIpMap = { ...networkConfig.nodeIpMap || {} };
+        delete updatedNodeIpMap[id];
+        saveNetworkConfig({
+          ...networkConfig,
+          nodeSubnetMap: updatedNodeSubnetMap,
+          nodeSecurityGroups: updatedSecurityGroups,
+          nodeIpMap: updatedNodeIpMap
+        });
+      }
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -1409,17 +1416,19 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           label="Give your new container a descriptive name."
           placeholder={
             (dropState?.type === 'postgres' || dropState?.type === 'sql')
-              ? "e.g. sql-db, main-store"
+              ? "e.g. sql-1"
               : dropState?.type === 'nosql'
-                ? "e.g. nosql-db, document-store"
+                ? "e.g. nosql-1"
                 : dropState?.type === 'nat'
-                  ? "e.g. nat-gateway, internet-exit"
+                  ? "e.g. nat-1"
                   : dropState?.type === 'loadbalancer'
-                    ? "e.g. alb, web-lb"
+                    ? "e.g. alb-1"
                     : dropState?.type === 'autoscalinggroup'
-                      ? "e.g. asg-web, main-scaling"
-                      : "e.g. web-server, api-gateway"
+                      ? "e.g. asg-1"
+                      : "e.g. server-1"
           }
+          maxLength={20}
+          restrictPattern={/[^a-zA-Z0-9-]/g}
           defaultValue={
             (() => {
               const type = dropState?.type || 'ubuntu';
@@ -1429,12 +1438,12 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                   : type === 'nosql'
                     ? 'nosql-'
                     : type === 'nat'
-                      ? 'NAT-'
+                      ? 'nat-'
                       : type === 'loadbalancer'
                         ? 'alb-'
                         : type === 'autoscalinggroup'
                           ? 'asg-'
-                          : 'server-';
+                          : 'srv-';
               let suffix = 1;
               while (containers.some(c => c.name === `${prefix}${suffix}`)) {
                 suffix++;

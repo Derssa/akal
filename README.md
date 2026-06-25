@@ -10,14 +10,14 @@
 
 TOROLLO is an interactive, visual sandbox designed to help students and developers learn backend architecture, Docker, networking, databases, and system design by actually building and running systems on their local machines.
 
-## 🛠️ Technology Stack
+## [ SYSTEM ] Technology Stack
 *   **Frontend:** React, TypeScript, Vite, React Flow, xterm.js
 *   **Backend:** Node.js, Express, TypeScript, Socket.io
 *   **Orchestration:** Docker, Dockerode (Interacts directly with your local Docker Daemon)
 
 ---
 
-## ⚡ Quick Start
+## [ START ] Quick Start
 
 Run the lab instantly from your terminal without needing to clone the repo or install anything permanently:
 
@@ -28,7 +28,7 @@ npx torollo start
 
 ---
 
-## 🏗️ Supported Infrastructure Nodes
+## [ COMPONENTS ] Supported Infrastructure Nodes
 
 You can drag and drop a wide range of infrastructure components onto the canvas. Everything is backed by **real Docker containers** running locally on your machine.
 
@@ -46,7 +46,7 @@ You can drag and drop a wide range of infrastructure components onto the canvas.
 
 ---
 
-## 🚀 Coming Very Soon
+## [ UPCOMING ] Coming Very Soon
 
 *   **Terraform Generation:** Automatic Infrastructure-as-Code (IaC) generation for your visual architectures, supporting every major cloud provider (AWS, Azure, GCP).
 *   **Databases:** Redis In-Memory Cache
@@ -56,7 +56,7 @@ You can drag and drop a wide range of infrastructure components onto the canvas.
 
 ---
 
-## 🎨 Core Features & Architecture
+## [ CORE ] Core Features & Architecture
 
 ### Interactive Learning by Doing
 Instead of reading passive, theory-heavy documentation, you learn by *doing*:
@@ -71,7 +71,7 @@ Instead of reading passive, theory-heavy documentation, you learn by *doing*:
 
 ---
 
-## 🛡️ Core Philosophy
+## [ IDEOLOGY ] Core Philosophy
 
 Everything runs **locally** on your machine. 
 - **No Cloud integrations** (No AWS credentials needed).

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import Modal from './Modal';
+import { Loader2 } from 'lucide-react';
 
 interface InputModalProps {
   title: string;
@@ -49,7 +50,6 @@ export default function InputModal({
       try {
         await onSubmit(value.trim());
       } finally {
-        // Only reset if it didn't unmount, but typically this modal is unmounted by parent on success
         setIsSubmitting(false);
       }
     }
@@ -78,9 +78,17 @@ export default function InputModal({
           <button type="submit" disabled={!value.trim() || isSubmitting} style={{
             ...styles.submitBtn,
             opacity: (!value.trim() || isSubmitting) ? 0.5 : 1,
-            cursor: isSubmitting ? 'wait' : 'pointer'
+            cursor: isSubmitting ? 'wait' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
           }}>
-            {isSubmitting ? 'Creating...' : submitText}
+            {isSubmitting ? (
+              <>
+                <Loader2 size={14} className="spin" />
+                Creating...
+              </>
+            ) : submitText}
           </button>
         </div>
       </form>

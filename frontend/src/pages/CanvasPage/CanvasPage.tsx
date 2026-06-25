@@ -1183,24 +1183,28 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const handleDeleteConfirmed = async () => {
     if (!deleteTarget) return;
     const id = deleteTarget;
-    setDeleteTarget(null);
-    const success = await deleteContainer(id);
-    if (success) {
-      delete positionsRef.current[id];
-      localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(positionsRef.current));
+    
+    try {
+      const success = await deleteContainer(id);
+      if (success) {
+        delete positionsRef.current[id];
+        localStorage.setItem(`akal-lab-graph-layout-${projectId}`, JSON.stringify(positionsRef.current));
 
-      const updatedNodeSubnetMap = { ...networkConfig.nodeSubnetMap };
-      delete updatedNodeSubnetMap[id];
-      const updatedSecurityGroups = { ...networkConfig.nodeSecurityGroups };
-      delete updatedSecurityGroups[id];
-      const updatedNodeIpMap = { ...networkConfig.nodeIpMap || {} };
-      delete updatedNodeIpMap[id];
-      saveNetworkConfig({
-        ...networkConfig,
-        nodeSubnetMap: updatedNodeSubnetMap,
-        nodeSecurityGroups: updatedSecurityGroups,
-        nodeIpMap: updatedNodeIpMap
-      });
+        const updatedNodeSubnetMap = { ...networkConfig.nodeSubnetMap };
+        delete updatedNodeSubnetMap[id];
+        const updatedSecurityGroups = { ...networkConfig.nodeSecurityGroups };
+        delete updatedSecurityGroups[id];
+        const updatedNodeIpMap = { ...networkConfig.nodeIpMap || {} };
+        delete updatedNodeIpMap[id];
+        saveNetworkConfig({
+          ...networkConfig,
+          nodeSubnetMap: updatedNodeSubnetMap,
+          nodeSecurityGroups: updatedSecurityGroups,
+          nodeIpMap: updatedNodeIpMap
+        });
+      }
+    } finally {
+      setDeleteTarget(null);
     }
   };
 

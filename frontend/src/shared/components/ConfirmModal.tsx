@@ -1,12 +1,13 @@
+import React, { useState } from 'react';
 import Modal from './Modal';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 
 interface ConfirmModalProps {
   title: string;
   message: string;
   confirmText?: string;
   variant?: 'danger' | 'default';
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -18,7 +19,17 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
   const isDanger = variant === 'danger';
+
+  const handleConfirm = async () => {
+    setIsDeleting(true);
+    try {
+      await onConfirm();
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <Modal onClose={onCancel}>
@@ -36,12 +47,23 @@ export default function ConfirmModal({
       <h3 style={styles.title}>{title}</h3>
       <p style={styles.message}>{message}</p>
       <div style={styles.actions}>
-        <button onClick={onCancel} style={styles.cancelBtn}>Cancel</button>
-        <button onClick={onConfirm} style={{
+        <button onClick={onCancel} style={styles.cancelBtn} disabled={isDeleting}>Cancel</button>
+        <button onClick={handleConfirm} disabled={isDeleting} style={{
           ...styles.confirmBtn,
           background: isDanger ? 'var(--color-danger)' : 'var(--color-accent)',
+          opacity: isDeleting ? 0.5 : 1,
+          cursor: isDeleting ? 'wait' : 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '6px'
         }}>
-          {confirmText}
+          {isDeleting ? (
+            <>
+              <Loader2 size={14} className="spin" />
+              Deleting...
+            </>
+          ) : confirmText}
         </button>
       </div>
     </Modal>

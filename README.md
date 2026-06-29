@@ -10,7 +10,7 @@
 
 TOROLLO is an interactive, visual sandbox designed to help students and developers learn backend architecture, Docker, networking, databases, and system design by actually building and running systems on their local machines.
 
-<img width="1917" height="906" alt="torollo-example" src="https://github.com/user-attachments/assets/5dd49d01-b24e-4550-b888-4da7f98d71a3" />
+<img width="1917" height="907" alt="torollo-example" src="https://github.com/user-attachments/assets/c80a04f1-8cc6-46fb-bf89-23a9af1a1a2d" />
 
 ## Technology Stack
 *   **Frontend:** React, TypeScript, Vite, React Flow, xterm.js

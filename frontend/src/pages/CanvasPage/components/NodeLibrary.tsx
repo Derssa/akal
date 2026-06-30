@@ -89,6 +89,13 @@ export default function NodeLibrary({ onCollapseChange }: NodeLibraryProps) {
           desc: 'Document DB + Shell',
           icon: <Braces size={18} color="#475569" />,
           collapsedIcon: <Braces size={20} color="#475569" />
+        },
+        {
+          type: 'redis',
+          name: 'Cache Store',
+          desc: 'In-memory key-value cache',
+          icon: <Database size={18} color="#DC2626" />,
+          collapsedIcon: <Database size={20} color="#DC2626" />
         }
       ]
     }

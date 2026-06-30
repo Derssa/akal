@@ -141,6 +141,40 @@
       "placeholder": "Search SQL commands or concepts..."
     }
   },
+  "redis": {
+    "tabs": {
+      "details": "Details",
+      "explorer": "Key Explorer",
+      "shell": "Redis Shell",
+      "cheatsheet": "Redis Cheat Sheet"
+    },
+    "details": {
+      "title": "Cache Node Details",
+      "desc": "In-memory key-value cache backed by a real Redis container. Use the Key Explorer and Shell to inspect and manipulate data.",
+      "imageLabel": "Image",
+      "portLabel": "Port",
+      "stateLabel": "State",
+      "running": "Running",
+      "stopped": "Stopped"
+    },
+    "explorer": {
+      "title": "Inspect keys: ",
+      "initializing": "Redis server is initializing... This may take a few seconds.",
+      "retryBtn": "Retry Key Scan",
+      "viewDataBtn": "View Value",
+      "noKeys": "No keys found. Use the Shell to add some."
+    },
+    "shell": {
+      "executeBtn": "Run Command",
+      "executingBtn": "Running...",
+      "placeholder": "Write a redis-cli command here, e.g. SET key value",
+      "consoleTitle": "Output Console",
+      "emptyOutput": "No output. Run a command to see the result."
+    },
+    "cheatsheet": {
+      "placeholder": "Search Redis commands or concepts..."
+    }
+  },
   "nosql": {
     "tabs": {
       "details": "Details & Config",

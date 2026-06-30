@@ -1,0 +1,110 @@
+[
+  {
+    "name": "Set Key",
+    "category": "Strings (Beginner)",
+    "description": "Store a string value under a key.",
+    "example": "SET user:1:name \"Alice Smith\""
+  },
+  {
+    "name": "Get Key",
+    "category": "Strings (Beginner)",
+    "description": "Read the value stored at a key.",
+    "example": "GET user:1:name"
+  },
+  {
+    "name": "Delete Key",
+    "category": "Keys (Beginner)",
+    "description": "Remove one or more keys.",
+    "example": "DEL user:1:name"
+  },
+  {
+    "name": "List Keys",
+    "category": "Keys (Beginner)",
+    "description": "Find all keys matching a pattern.",
+    "example": "KEYS user:*"
+  },
+  {
+    "name": "Key Type",
+    "category": "Keys (Beginner)",
+    "description": "Show the data type stored at a key.",
+    "example": "TYPE queue:emails"
+  },
+  {
+    "name": "Set Expiry",
+    "category": "Expiration (Beginner)",
+    "description": "Expire a key automatically after N seconds.",
+    "example": "EXPIRE session:abc 60"
+  },
+  {
+    "name": "Time To Live",
+    "category": "Expiration (Beginner)",
+    "description": "Show remaining seconds before a key expires.",
+    "example": "TTL session:abc"
+  },
+  {
+    "name": "Set With Expiry",
+    "category": "Expiration (Intermediate)",
+    "description": "Store a value and set its TTL in one command.",
+    "example": "SET session:abc token123 EX 60"
+  },
+  {
+    "name": "Increment Counter",
+    "category": "Counters (Beginner)",
+    "description": "Atomically increment a numeric value (great for page views).",
+    "example": "INCR page:home:views"
+  },
+  {
+    "name": "Push To List",
+    "category": "Lists (Intermediate)",
+    "description": "Append one or more values to the tail of a list.",
+    "example": "RPUSH queue:emails welcome reminder"
+  },
+  {
+    "name": "Read List Range",
+    "category": "Lists (Intermediate)",
+    "description": "Read elements of a list (0 -1 returns all).",
+    "example": "LRANGE queue:emails 0 -1"
+  },
+  {
+    "name": "Set Hash Fields",
+    "category": "Hashes (Intermediate)",
+    "description": "Store multiple fields of an object under one key.",
+    "example": "HSET product:1 name \"Micro VM\" price 4.50"
+  },
+  {
+    "name": "Read Hash",
+    "category": "Hashes (Intermediate)",
+    "description": "Return all fields and values of a hash.",
+    "example": "HGETALL product:1"
+  },
+  {
+    "name": "Add To Set",
+    "category": "Sets (Intermediate)",
+    "description": "Add unique members to a set.",
+    "example": "SADD tags:active admin developer"
+  },
+  {
+    "name": "Read Set Members",
+    "category": "Sets (Intermediate)",
+    "description": "Return all members of a set.",
+    "example": "SMEMBERS tags:active"
+  },
+  {
+    "name": "Scan Keys",
+    "category": "Keys (Advanced)",
+    "description": "Iterate keys without blocking the server (production-safe alternative to KEYS).",
+    "example": "SCAN 0 MATCH user:* COUNT 100"
+  },
+  {
+    "name": "Database Size",
+    "category": "Server (Advanced)",
+    "description": "Count the number of keys in the current database.",
+    "example": "DBSIZE"
+  },
+  {
+    "name": "Flush Database",
+    "category": "Server (Advanced)",
+    "description": "Delete every key in the current database (irreversible).",
+    "example": "FLUSHDB"
+  }
+]

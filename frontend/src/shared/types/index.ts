@@ -5,7 +5,7 @@ export interface ContainerData {
   name: string;
   state: string;
   status: string;
-  type?: 'ubuntu' | 'postgres' | 'mysql' | 'sql' | 'nosql' | 'nat' | 'loadbalancer' | 'autoscalinggroup';
+  type?: 'ubuntu' | 'postgres' | 'mysql' | 'sql' | 'nosql' | 'redis' | 'nat' | 'loadbalancer' | 'autoscalinggroup';
   port?: string;
   ip?: string;
   image?: string;

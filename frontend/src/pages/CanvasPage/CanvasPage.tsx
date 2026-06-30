@@ -10,6 +10,8 @@ import PostgresNode from '../../features/nodes/PostgresNode/PostgresNode';
 import PostgresModal from '../../features/nodes/PostgresNode/PostgresModal';
 import NoSqlNode from '../../features/nodes/NoSqlNode/NoSqlNode';
 import NoSqlModal from '../../features/nodes/NoSqlNode/NoSqlModal';
+import RedisNode from '../../features/nodes/RedisNode/RedisNode';
+import RedisModal from '../../features/nodes/RedisNode/RedisModal';
 
 import LoadBalancerNode from '../../features/nodes/LoadBalancerNode/LoadBalancerNode';
 import LoadBalancerModal from '../../features/nodes/LoadBalancerNode/LoadBalancerModal';
@@ -120,6 +122,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [inspectingPostgres, setInspectingPostgres] = useState<{ id: string; name: string } | null>(null);
   const [inspectingNosql, setInspectingNosql] = useState<{ id: string; name: string } | null>(null);
+  const [inspectingRedis, setInspectingRedis] = useState<{ id: string; name: string } | null>(null);
 
   const [inspectingNat, setInspectingNat] = useState<{ id: string; name: string } | null>(null);
   const [inspectingLoadBalancer, setInspectingLoadBalancer] = useState<{ id: string; name: string } | null>(null);
@@ -171,6 +174,7 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     postgres: PostgresNode,
     sql: PostgresNode,
     nosql: NoSqlNode,
+    redis: RedisNode,
     nat: NatNode,
     vpc: VpcNode,
     subnet: SubnetNode,
@@ -399,9 +403,9 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
     if (!targetNode) return;
     const targetType = targetNode.type || 'ubuntu';
     
-    const isDb = ['postgres', 'sql', 'nosql', 'mysql'].includes(targetType);
+    const isDb = ['postgres', 'sql', 'nosql', 'mysql', 'redis'].includes(targetType);
     const defaultProtocol = isDb ? 'TCP' : 'ALL';
-    const defaultPort = (targetType === 'postgres' || targetType === 'sql') ? '5432' : (targetType === 'nosql') ? '27017' : (targetType === 'mysql') ? '3306' : 'ALL';
+    const defaultPort = (targetType === 'postgres' || targetType === 'sql') ? '5432' : (targetType === 'nosql') ? '27017' : (targetType === 'mysql') ? '3306' : (targetType === 'redis') ? '6379' : 'ALL';
 
     const currentRules = networkConfig.nodeSecurityGroups[target] || [];
     const alreadyExists = currentRules.some(r => r.type === 'inbound' && r.action === 'ALLOW' && r.port === defaultPort && r.source === source);
@@ -753,6 +757,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                 setInspectingPostgres({ id, name });
               } else if (nodeType === 'nosql') {
                 setInspectingNosql({ id, name });
+              } else if (nodeType === 'redis') {
+                setInspectingRedis({ id, name });
               } else if (nodeType === 'nat') {
                 setInspectingNat({ id, name });
               } else if (nodeType === 'loadbalancer') {
@@ -1414,6 +1420,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
               ? "Create SQL Database Node"
               : dropState?.type === 'nosql'
                 ? "Create NoSQL Database Node"
+                : dropState?.type === 'redis'
+                  ? "Create Cache Store Node"
                 : dropState?.type === 'nat'
                   ? "Create NAT Gateway Node"
                   : dropState?.type === 'loadbalancer'
@@ -1428,6 +1436,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
               ? "e.g. sql-1"
               : dropState?.type === 'nosql'
                 ? "e.g. nosql-1"
+                : dropState?.type === 'redis'
+                  ? "e.g. redis-1"
                 : dropState?.type === 'nat'
                   ? "e.g. nat-1"
                   : dropState?.type === 'loadbalancer'
@@ -1446,6 +1456,8 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
                   ? 'sql-'
                   : type === 'nosql'
                     ? 'nosql-'
+                    : type === 'redis'
+                      ? 'redis-'
                     : type === 'nat'
                       ? 'nat-'
                       : type === 'loadbalancer'
@@ -1492,6 +1504,15 @@ export default function CanvasPage({ projectId, projectName, onBackToProjects, o
           nodeName={inspectingNosql.name}
           projectId={projectId}
           onClose={() => setInspectingNosql(null)}
+        />
+      )}
+
+      {inspectingRedis && (
+        <RedisModal
+          containerId={inspectingRedis.id}
+          nodeName={inspectingRedis.name}
+          projectId={projectId}
+          onClose={() => setInspectingRedis(null)}
         />
       )}
 

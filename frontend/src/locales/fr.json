@@ -141,6 +141,40 @@
       "placeholder": "Rechercher des commandes ou concepts SQL..."
     }
   },
+  "redis": {
+    "tabs": {
+      "details": "Détails",
+      "explorer": "Explorateur de Clés",
+      "shell": "Shell Redis",
+      "cheatsheet": "Aide-mémoire Redis"
+    },
+    "details": {
+      "title": "Détails du Nœud de Cache",
+      "desc": "Cache clé-valeur en mémoire adossé à un vrai conteneur Redis. Utilisez l'Explorateur de Clés et le Shell pour inspecter et manipuler les données.",
+      "imageLabel": "Image",
+      "portLabel": "Port",
+      "stateLabel": "État",
+      "running": "En cours d'exécution",
+      "stopped": "Arrêté"
+    },
+    "explorer": {
+      "title": "Inspecter les clés : ",
+      "initializing": "Le serveur Redis s'initialise... Cela peut prendre quelques secondes.",
+      "retryBtn": "Réessayer le Scan des Clés",
+      "viewDataBtn": "Voir la Valeur",
+      "noKeys": "Aucune clé trouvée. Utilisez le Shell pour en ajouter."
+    },
+    "shell": {
+      "executeBtn": "Exécuter la Commande",
+      "executingBtn": "Exécution en cours...",
+      "placeholder": "Écrivez une commande redis-cli ici, ex: SET clé valeur",
+      "consoleTitle": "Console de Sortie",
+      "emptyOutput": "Aucune sortie. Exécutez une commande pour voir le résultat."
+    },
+    "cheatsheet": {
+      "placeholder": "Rechercher des commandes ou concepts Redis..."
+    }
+  },
   "nosql": {
     "tabs": {
       "details": "Détails & Config",

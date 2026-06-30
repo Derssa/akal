@@ -4,6 +4,7 @@ export class DockerInitializer {
   private static readonly UBUNTU_IMAGE_TAG = 'derssa/backend-lab-ubuntu:v1';
   private static readonly POSTGRES_IMAGE_TAG = 'derssa/backend-lab-postgres:v1';
   private static readonly MONGO_IMAGE_TAG = 'derssa/backend-lab-mongo:v1';
+  private static readonly REDIS_IMAGE_TAG = 'derssa/backend-lab-redis:v1';
   private static isInitializing = false;
 
   /**
@@ -80,6 +81,7 @@ export class DockerInitializer {
       await this.ensureImage(tags, this.UBUNTU_IMAGE_TAG, 'Ubuntu');
       await this.ensureImage(tags, this.POSTGRES_IMAGE_TAG, 'PostgreSQL');
       await this.ensureImage(tags, this.MONGO_IMAGE_TAG, 'MongoDB');
+      await this.ensureImage(tags, this.REDIS_IMAGE_TAG, 'Redis');
     } catch (err) {
       console.error('[DockerInitializer] Docker check failed. Is Docker running?');
       throw err;
@@ -189,6 +191,65 @@ export class DockerInitializer {
         console.log(`[DockerInitializer] Cleaning up temporary build container...`);
         await tempContainer.remove({ force: true });
         console.log(`[DockerInitializer] Custom MongoDB image with iptables created successfully.`);
+      } else if (tag === this.REDIS_IMAGE_TAG) {
+        const fallbackTag = 'redis:7-alpine';
+        console.log(`[DockerInitializer] Tag ${tag} not found. Building custom Redis image locally...`);
+        
+        // Ensure base redis:7-alpine is pulled
+        const imagesList = await docker.listImages();
+        const localTags = imagesList.flatMap(img => img.RepoTags || []);
+        if (!localTags.includes(fallbackTag)) {
+          console.log(`[DockerInitializer] Pulling base redis:7-alpine image...`);
+          await new Promise<void>((resolve, reject) => {
+            docker.pull(fallbackTag, {}, (err, stream) => {
+              if (err) return reject(err);
+              if (!stream) return reject(new Error('Pull stream is undefined'));
+              docker.modem.followProgress(stream, (finishedErr) => finishedErr ? reject(finishedErr) : resolve());
+            });
+          });
+        }
+        
+        // Clean up any stale temp containers from previous runs
+        try {
+          const oldContainer = docker.getContainer('akal-lab-temp-redis-build');
+          await oldContainer.remove({ force: true });
+        } catch {
+          // Ignore if old container doesn't exist
+        }
+
+        console.log(`[DockerInitializer] Creating temporary build container for Redis...`);
+        const tempContainer = await docker.createContainer({
+          Image: fallbackTag,
+          name: 'akal-lab-temp-redis-build',
+          Entrypoint: ['tail', '-f', '/dev/null']
+        });
+        await tempContainer.start();
+        
+        console.log(`[DockerInitializer] Installing iptables inside build container...`);
+        const exec = await tempContainer.exec({
+          Cmd: ['sh', '-c', 'apk update && apk add --no-cache iptables iproute2'],
+          AttachStdout: true,
+          AttachStderr: true
+        });
+        const stream = await exec.start({});
+        await new Promise<void>((resolve) => {
+          stream.on('data', () => {});
+          stream.on('end', () => resolve());
+        });
+
+        console.log(`[DockerInitializer] Committing custom Redis image as ${tag}...`);
+        await tempContainer.commit({
+          repo: 'derssa/backend-lab-redis',
+          tag: 'v1',
+          changes: [
+            'ENTRYPOINT ["docker-entrypoint.sh"]',
+            'CMD ["redis-server"]'
+          ]
+        });
+
+        console.log(`[DockerInitializer] Cleaning up temporary build container...`);
+        await tempContainer.remove({ force: true });
+        console.log(`[DockerInitializer] Custom Redis image with iptables created successfully.`);
       } else {
         throw pullErr;
       }

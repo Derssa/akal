@@ -38,7 +38,7 @@ export class ContainerManager {
   private static readonly POSTGRES_IMAGE_TAG = 'derssa/backend-lab-postgres:v1';
   private static readonly MONGO_IMAGE_TAG = 'derssa/backend-lab-mongo:v1';
   private static readonly NGINX_IMAGE_TAG = 'derssa/backend-lab-nginx:v1';
-  private static readonly REDIS_IMAGE_TAG = 'redis:7-alpine';
+  private static readonly REDIS_IMAGE_TAG = 'derssa/backend-lab-redis:v1';
 
   /**
    * Ensures that the custom prebuilt Ubuntu image exists locally.

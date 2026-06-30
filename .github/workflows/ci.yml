@@ -9,6 +9,9 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
     - name: Checkout Code
@@ -22,21 +25,13 @@ jobs:
         cache-dependency-path: backend/package-lock.json
 
     - name: Install Dependencies
-      run: |
-        cd backend
-        npm ci
+      run: npm ci
 
     - name: Run Linter
-      run: |
-        cd backend
-        npm run lint
+      run: npm run lint
 
     - name: Compile Code
-      run: |
-        cd backend
-        npm run build
+      run: npm run build
 
     - name: Run Tests
-      run: |
-        cd backend
-        npm test
+      run: npm test

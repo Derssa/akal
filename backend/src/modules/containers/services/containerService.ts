@@ -1,5 +1,20 @@
 import { ContainerManager, ContainerInfo } from '../../../infrastructure/docker/ContainerManager';
 
+/**
+ * Tokenizes a redis-cli command line into individual arguments, honoring single
+ * and double quoted segments. This lets values containing spaces survive intact,
+ * e.g. `SET greeting "hello world"` -> ['SET', 'greeting', 'hello world'].
+ */
+function parseRedisArgs(input: string): string[] {
+  const args: string[] = [];
+  const tokenPattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = tokenPattern.exec(input)) !== null) {
+    args.push(match[1] ?? match[2] ?? match[3]);
+  }
+  return args;
+}
+
 export class ContainerService {
   public static async listContainers(projectId: string): Promise<ContainerInfo[]> {
     return ContainerManager.listContainersByProject(projectId);
@@ -113,6 +128,47 @@ export class ContainerService {
 
   public static async executePostgresQuery(containerId: string, database: string, query: string): Promise<string> {
     return ContainerManager.executePsqlCommand(containerId, database, query);
+  }
+
+  public static async getRedisExplorer(containerId: string) {
+    // Seed a few demo keys exactly once per container, so beginners immediately have
+    // something to explore (mirrors the Postgres/Mongo seeding). The "seeded" marker is
+    // stored in logical DB 1, which survives a FLUSHDB on the default DB 0 — that way a
+    // user can run destructive commands (FLUSHDB, DEL) and actually observe an empty
+    // cache instead of it being silently re-seeded on the next explorer refresh.
+    const seeded = await ContainerManager.executeRedisCommand(containerId, ['-n', '1', 'GET', 'akal:seeded']);
+    if (seeded.startsWith('ERROR')) {
+      throw new Error(seeded);
+    }
+    if (seeded.trim() === '') {
+      await ContainerManager.executeRedisCommand(containerId, ['SET', 'user:1:name', 'Alice Smith']);
+      await ContainerManager.executeRedisCommand(containerId, ['SET', 'user:2:name', 'Bob Jones']);
+      await ContainerManager.executeRedisCommand(containerId, ['INCR', 'page:home:views']);
+      await ContainerManager.executeRedisCommand(containerId, ['RPUSH', 'queue:emails', 'welcome', 'reminder', 'invoice']);
+      await ContainerManager.executeRedisCommand(containerId, ['HSET', 'product:1', 'name', 'Micro VM vCPU', 'price', '4.50']);
+      await ContainerManager.executeRedisCommand(containerId, ['SADD', 'tags:active', 'admin', 'developer', 'analyst']);
+      await ContainerManager.executeRedisCommand(containerId, ['-n', '1', 'SET', 'akal:seeded', '1']);
+    }
+
+    // List all keys (KEYS is fine for an educational lab; production would use SCAN)
+    const keysRaw = await ContainerManager.executeRedisCommand(containerId, ['KEYS', '*']);
+    const keys = keysRaw.split('\n').map(k => k.trim()).filter(Boolean);
+
+    const entries: Array<{ key: string; type: string }> = [];
+    for (const key of keys) {
+      const type = await ContainerManager.executeRedisCommand(containerId, ['TYPE', key]);
+      entries.push({ key, type: type.trim() });
+    }
+
+    return entries;
+  }
+
+  public static async executeRedisQuery(containerId: string, query: string): Promise<string> {
+    const args = parseRedisArgs(query);
+    if (args.length === 0) {
+      return '';
+    }
+    return ContainerManager.executeRedisCommand(containerId, args);
   }
 
   public static async getNosqlExplorer(containerId: string) {

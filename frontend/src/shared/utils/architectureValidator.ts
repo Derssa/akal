@@ -42,6 +42,9 @@ export function validateArchitecture(
   const successes: string[] = [];
 
   const dbTypes = ['postgres', 'sql', 'nosql', 'mysql'];
+  // Data stores that should be kept private and never exposed publicly. Redis is a
+  // cache rather than a relational DB tier, so it is tracked separately from dbTypes.
+  const sensitiveTypes = [...dbTypes, 'redis'];
 
   // --- 1. ERROR CHECKS ---
   
@@ -58,38 +61,38 @@ export function validateArchitecture(
 
   // --- 2. WARNING CHECKS ---
 
-  // DB in public subnet check
+  // Data store in public subnet check
   containers.forEach(node => {
-    const isDb = dbTypes.includes(node.type || '');
-    if (isDb) {
+    const isSensitive = sensitiveTypes.includes(node.type || '');
+    if (isSensitive) {
       const subnetId = networkConfig.nodeSubnetMap[node.id];
       if (subnetId) {
         const subnet = networkConfig.subnets.find(s => s.id === subnetId);
         if (subnet && subnet.type === 'public') {
-          warnings.push(`Database "${node.name}" is in a public subnet. For safety, database instances should be kept in private subnets.`);
+          warnings.push(`Data store "${node.name}" is in a public subnet. For safety, data store instances should be kept in private subnets.`);
         }
       }
     }
   });
 
-  // Database 0.0.0.0/0 exposure check
+  // Data store 0.0.0.0/0 exposure check
   containers.forEach(node => {
-    const isDb = dbTypes.includes(node.type || '');
-    if (isDb) {
+    const isSensitive = sensitiveTypes.includes(node.type || '');
+    if (isSensitive) {
       const rules = networkConfig.nodeSecurityGroups[node.id] || [];
       const hasPublicAccess = rules.some(
         rule => rule.type === 'inbound' && rule.action === 'ALLOW' && rule.source === '0.0.0.0/0'
       );
       if (hasPublicAccess) {
-        warnings.push(`Database "${node.name}" is exposed to the public internet (0.0.0.0/0) in its security group.`);
+        warnings.push(`Data store "${node.name}" is exposed to the public internet (0.0.0.0/0) in its security group.`);
       }
     }
   });
 
-  // Check for Redis/caching tier
+  // Check for Redis/caching tier (by node type or by name, for backwards compatibility)
   const hasCacheNode = containers.some(c => {
     const name = c.name.toLowerCase();
-    return name.includes('redis') || name.includes('cache') || name.includes('memcached');
+    return c.type === 'redis' || name.includes('redis') || name.includes('cache') || name.includes('memcached');
   });
   if (containers.length > 0 && !hasCacheNode) {
     // Only warn if there's at least one DB

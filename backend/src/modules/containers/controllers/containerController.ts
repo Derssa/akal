@@ -161,6 +161,31 @@ export class ContainerController {
     }
   }
 
+  public static async redisExplorer(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const explorerData = await ContainerService.getRedisExplorer(id as string);
+      res.json(explorerData);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  public static async redisQuery(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { query } = req.body;
+      if (!query) {
+        res.status(400).json({ error: 'Query is required' });
+        return;
+      }
+      const result = await ContainerService.executeRedisQuery(id as string, query);
+      res.json({ result });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
   public static async nosqlExplorer(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;

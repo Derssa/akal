@@ -6,7 +6,7 @@ export interface ContainerInfo {
   image: string;
   state: string;
   status: string;
-  type?: 'ubuntu' | 'postgres' | 'sql' | 'nosql' | 'nat' | 'loadbalancer' | 'autoscalinggroup';
+  type?: 'ubuntu' | 'postgres' | 'sql' | 'nosql' | 'redis' | 'nat' | 'loadbalancer' | 'autoscalinggroup';
   port?: string;
   ip?: string;
   asgId?: string;
@@ -38,6 +38,7 @@ export class ContainerManager {
   private static readonly POSTGRES_IMAGE_TAG = 'derssa/backend-lab-postgres:v1';
   private static readonly MONGO_IMAGE_TAG = 'derssa/backend-lab-mongo:v1';
   private static readonly NGINX_IMAGE_TAG = 'derssa/backend-lab-nginx:v1';
+  private static readonly REDIS_IMAGE_TAG = 'redis:7-alpine';
 
   /**
    * Ensures that the custom prebuilt Ubuntu image exists locally.
@@ -155,6 +156,40 @@ export class ContainerManager {
   }
 
   /**
+   * Ensures that the Redis image exists locally.
+   */
+  private static async ensureRedisImage(): Promise<void> {
+    const images = await docker.listImages();
+    const hasImage = images.some(img =>
+      img.RepoTags && img.RepoTags.includes(this.REDIS_IMAGE_TAG)
+    );
+
+    if (!hasImage) {
+      console.log('Pulling Redis image (first time only)...');
+      await new Promise<void>((resolve, reject) => {
+        docker.pull(this.REDIS_IMAGE_TAG, {}, (err, stream) => {
+          if (err) return reject(err);
+          if (!stream) return reject(new Error('Pull stream is undefined'));
+
+          docker.modem.followProgress(
+            stream,
+            (errFinished) => {
+              if (errFinished) return reject(errFinished);
+              resolve();
+            },
+            (event) => {
+              if (event.status) {
+                const progress = event.progress ? ` ${event.progress}` : '';
+                console.log(`[Docker Hub Pull - Redis] ${event.status}${progress}`);
+              }
+            }
+          );
+        });
+      });
+    }
+  }
+
+  /**
    * Ensures that the Nginx Load Balancer image exists locally.
    */
   private static async ensureNginxImage(): Promise<void> {
@@ -197,8 +232,9 @@ export class ContainerManager {
         if (c.Ports && c.Ports.length > 0) {
           const matchedPostgres = c.Ports.find(p => p.PrivatePort === 5432);
           const matchedMongo = c.Ports.find(p => p.PrivatePort === 27017);
+          const matchedRedis = c.Ports.find(p => p.PrivatePort === 6379);
           const matchedNginx = c.Ports.find(p => p.PrivatePort === 80);
-          const matchedPort = matchedPostgres || matchedMongo || matchedNginx;
+          const matchedPort = matchedPostgres || matchedMongo || matchedRedis || matchedNginx;
           if (matchedPort && matchedPort.PublicPort) {
             port = matchedPort.PublicPort.toString();
           }
@@ -223,7 +259,7 @@ export class ContainerManager {
           image: c.Image,
           state: isFakeCrashed ? 'exited' : c.State,
           status: isFakeCrashed ? 'Exited (0) 1 second ago' : c.Status,
-          type: (c.Labels['akal.node.type'] || 'ubuntu') as 'ubuntu' | 'postgres' | 'sql' | 'nosql' | 'nat' | 'loadbalancer' | 'autoscalinggroup',
+          type: (c.Labels['akal.node.type'] || 'ubuntu') as 'ubuntu' | 'postgres' | 'sql' | 'nosql' | 'redis' | 'nat' | 'loadbalancer' | 'autoscalinggroup',
           port,
           ip,
           asgId,
@@ -242,11 +278,13 @@ export class ContainerManager {
   ): Promise<ContainerInfo> {
     const isPostgres = type === 'postgres' || type === 'sql';
     const isMongo = type === 'nosql';
+    const isRedis = type === 'redis';
     const isLoadBalancer = type === 'loadbalancer';
     let image = this.UBUNTU_IMAGE_TAG;
     if (customImage) image = customImage;
     else if (isPostgres) image = this.POSTGRES_IMAGE_TAG;
     else if (isMongo) image = this.MONGO_IMAGE_TAG;
+    else if (isRedis) image = this.REDIS_IMAGE_TAG;
     else if (isLoadBalancer) image = this.NGINX_IMAGE_TAG;
 
     if (customImage) {
@@ -255,6 +293,8 @@ export class ContainerManager {
       await this.ensurePostgresImage();
     } else if (isMongo) {
       await this.ensureMongoImage();
+    } else if (isRedis) {
+      await this.ensureRedisImage();
     } else if (isLoadBalancer) {
       await this.ensureNginxImage();
     } else {
@@ -304,6 +344,8 @@ export class ContainerManager {
       createOpts.Cmd = ['postgres', '-c', 'fsync=off', '-c', 'synchronous_commit=off', '-c', 'full_page_writes=off'];
     } else if (isMongo) {
       // MongoDB does not require special env vars for standard default use
+    } else if (isRedis) {
+      // Redis starts on its default command; no special env vars or entrypoint needed
     } else if (isLoadBalancer) {
       createOpts.HostConfig.PortBindings = {
         '80/tcp': [{ HostPort: '' }]
@@ -353,7 +395,7 @@ export class ContainerManager {
       image,
       state: 'running',
       status: 'Up less than a second',
-      type: type as 'ubuntu' | 'postgres' | 'sql' | 'nosql' | 'nat' | 'loadbalancer',
+      type: type as 'ubuntu' | 'postgres' | 'sql' | 'nosql' | 'redis' | 'nat' | 'loadbalancer',
       port,
       ip
     };
@@ -387,6 +429,44 @@ export class ContainerManager {
         let cleanOutput = output.trim();
         if (cleanOutput.includes("connection to server on socket") || cleanOutput.includes("Is the server running locally")) {
           cleanOutput = "ERROR: Database server is still starting up. Please wait 5-10 seconds for initialization to complete and try again.";
+        }
+        resolve(cleanOutput);
+      });
+
+      stream.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
+
+  public static async executeRedisCommand(containerId: string, args: string[]): Promise<string> {
+    const container = docker.getContainer(containerId);
+
+    const exec = await container.exec({
+      Cmd: ['redis-cli', ...args],
+      AttachStdout: true,
+      AttachStderr: true
+    });
+
+    const stream = await exec.start({});
+
+    return new Promise<string>((resolve, reject) => {
+      let output = '';
+
+      container.modem.demuxStream(stream, {
+        write: (chunk: Buffer) => {
+          output += chunk.toString();
+        }
+      }, {
+        write: (chunk: Buffer) => {
+          output += chunk.toString();
+        }
+      });
+
+      stream.on('end', () => {
+        let cleanOutput = output.trim();
+        if (cleanOutput.includes("Could not connect to Redis") || cleanOutput.includes("Connection refused")) {
+          cleanOutput = "ERROR: Redis server is still starting up. Please wait 5-10 seconds for initialization to complete and try again.";
         }
         resolve(cleanOutput);
       });

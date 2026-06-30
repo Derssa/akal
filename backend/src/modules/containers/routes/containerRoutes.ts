@@ -13,6 +13,8 @@ router.get('/:id/postgres/explorer', ContainerController.postgresExplorer);
 router.post('/:id/postgres/query', ContainerController.postgresQuery);
 router.get('/:id/nosql/explorer', ContainerController.nosqlExplorer);
 router.post('/:id/nosql/query', ContainerController.nosqlQuery);
+router.get('/:id/redis/explorer', ContainerController.redisExplorer);
+router.post('/:id/redis/query', ContainerController.redisQuery);
 router.post('/:id/scale', ContainerController.scale);
 
 // ASG Routes
